@@ -1,17 +1,23 @@
-// Blocks, mempool, stake-weighted proposer selection, block building/validation and BFT commit certificates.
-// A block is final once validators holding > 2/3 of stake have signed it (see consensus.js).
+// Blocks, mempool, Proof-of-History slots/epochs, stake-weighted leader schedule, block building/validation
+// and BFT commit certificates (> 2/3 of the epoch's bonded stake precommitting the block).
 import { canonicalJSON, hexToBytes, bytesToBig, utf8 } from '../crypto/encoding.js';
-import { sha256, sha256Hex, taggedHash } from '../crypto/sha256.js';
+import { sha256, sha256Hex } from '../crypto/sha256.js';
 import { schnorrSign, schnorrVerify } from '../crypto/secp256k1.js';
 import { State, applyTx, txAddresses } from './state.js';
 import { addressFromPub, parsePub, accountKeyFromSeed, devnetSeed, DEFAULT_DEVNET_SECRET } from './keys.js';
 import { txHash, merkleRoot } from './tx.js';
+import { PohRecorder, verifyPoh, pohSeed } from './poh.js';
+import { activeSet, enterEpoch, distributeReward, newValidator, voteDigest } from './staking.js';
 import {
-  CHAIN_ID, UNIT, MAX_SUPPLY, GENESIS_TIMESTAMP, MAX_BLOCK_TXS, MAX_MEMPOOL, MAX_PENDING_PER_SENDER, ROUND_TIMEOUT_MS, MAX_CLOCK_DRIFT_MS, blockReward,
+  CHAIN_ID, UNIT, MAX_SUPPLY, GENESIS_TIMESTAMP, MAX_BLOCK_TXS, MAX_MEMPOOL, MAX_PENDING_PER_SENDER, MAX_CLOCK_DRIFT_MS, blockReward,
+  TICKS_PER_SLOT, SLOTS_PER_EPOCH, LEADER_SLOTS, MAX_PROVEN_SKIP_TICKS, MAX_BLOCK_TICKS, HEARTBEAT_SLOTS,
 } from './params.js';
 
 export const VALIDATOR_NAMES = ['vox-validator-aurora', 'vox-validator-borealis', 'vox-validator-cygnus', 'vox-validator-draco'];
 const VALIDATOR_STAKES = [300_000n, 250_000n, 250_000n, 200_000n]; // any 3 of 4 exceed 2/3: tolerates 1 faulty validator
+const GENESIS_COMMISSION_BPS = 1_000;
+
+export const epochOf = (slot) => Math.floor(slot / SLOTS_PER_EPOCH);
 
 // Devnet roles derived from the network secret.
 export function devnetKeys(secret = DEFAULT_DEVNET_SECRET) {
@@ -25,29 +31,35 @@ export function devnetKeys(secret = DEFAULT_DEVNET_SECRET) {
   };
 }
 
-// Genesis: 5% of max supply to the devnet faucet, validator stake, and gas money for the facilitator.
+// Genesis: 5% of max supply to the devnet faucet, validator self-stake, gas money for the facilitator.
 export function makeGenesis(keys) {
   const allocations = [
     { address: keys.faucet.address, label: 'Devnet faucet', amount: (10_500_000n * UNIT).toString() },
     { address: keys.facilitator.address, label: 'x402 facilitator (gas)', amount: (10_000n * UNIT).toString() },
   ];
   const validators = keys.validators.map((v, i) => ({ name: v.name, pub: v.pubHex, address: v.address, stake: (VALIDATOR_STAKES[i] * UNIT).toString() }));
-  const header = { chainId: CHAIN_ID, height: 0, round: 0, prevHash: '0'.repeat(64), timestamp: GENESIS_TIMESTAMP, proposer: '', txRoot: merkleRoot([]), reward: '0', fees: '0' };
-  return { ...header, hash: sha256Hex(canonicalJSON({ header, allocations, validators })), signature: '', txs: [], allocations, validators };
+  const pohEnd = pohSeed(sha256Hex(canonicalJSON({ allocations, validators })));
+  const header = { chainId: CHAIN_ID, height: 0, slot: 0, prevHash: '0'.repeat(64), timestamp: GENESIS_TIMESTAMP, proposer: '', txRoot: merkleRoot([]), reward: '0', fees: '0', pohTicks: 0, pohEnd };
+  return { ...header, hash: sha256Hex(canonicalJSON({ header, allocations, validators })), signature: '', poh: { entries: [] }, txs: [], allocations, validators };
 }
 
 export function genesisState(genesis) {
   const s = new State();
   for (const a of genesis.allocations) { s.credit(a.address, BigInt(a.amount)); s.issued += BigInt(a.amount); }
-  for (const v of genesis.validators) { s.staked += BigInt(v.stake); s.issued += BigInt(v.stake); }
+  for (const v of genesis.validators) {
+    s.validators.set(v.pub, newValidator(v.pub, v.name.replace('vox-validator-', ''), GENESIS_COMMISSION_BPS, BigInt(v.stake), 0));
+    s.staked += BigInt(v.stake);
+    s.issued += BigInt(v.stake);
+  }
   if (s.issued > MAX_SUPPLY) throw new Error('genesis exceeds max supply');
   return s;
 }
 
-const headerOf = (b) => ({ chainId: CHAIN_ID, height: b.height, round: b.round, prevHash: b.prevHash, timestamp: b.timestamp, proposer: b.proposer, txRoot: b.txRoot, reward: b.reward, fees: b.fees });
+const headerOf = (b) => ({
+  chainId: CHAIN_ID, height: b.height, slot: b.slot, prevHash: b.prevHash, timestamp: b.timestamp, proposer: b.proposer,
+  txRoot: b.txRoot, reward: b.reward, fees: b.fees, pohTicks: b.pohTicks, pohEnd: b.pohEnd,
+});
 export const blockHash = (b) => sha256Hex(canonicalJSON(headerOf(b)));
-// Validators sign (height, blockHash). The commit certificate is not part of the block hash.
-export const voteDigest = (height, hash) => taggedHash('Voxian/vote', utf8(CHAIN_ID), utf8(`${height}:${hash}`));
 
 // Bounded insertion-ordered set (oldest entries evicted first).
 class BoundedSet {
@@ -58,18 +70,20 @@ class BoundedSet {
 }
 
 export class MemoryStorage {
-  constructor() { this.blocks = []; }
+  constructor() { this.blocks = []; this.meta = {}; }
   async load() { return this.blocks; }
   async append(block) { this.blocks.push(block); }
   async replaceAll(blocks) { this.blocks = [...blocks]; }
-  async clear() { this.blocks = []; }
+  async clear() { this.blocks = []; this.meta = {}; }
+  loadMeta(key) { return this.meta[key] ?? null; }
+  saveMeta(key, value) { this.meta[key] = structuredClone(value); }
 }
 
 // Who "sends" a tx, for per-sender mempool limits (shielded txs have no public sender).
 function senderOf(tx) {
-  if (tx.type === 'transfer' || tx.type === 'shield') return tx.from;
   if (tx.type === 'auth_transfer') return tx.relayer;
-  return 'shielded';
+  if (tx.type === 'shielded') return 'shielded';
+  return tx.from;
 }
 
 export class Blockchain {
@@ -78,9 +92,6 @@ export class Blockchain {
     this.genesis = makeGenesis(keys);
     this.storage = storage;
     this.now = now;
-    this.validators = this.genesis.validators;
-    this.totalStake = this.validators.reduce((n, v) => n + BigInt(v.stake), 0n);
-    this.stakeOf = new Map(this.validators.map((v) => [v.pub, BigInt(v.stake)]));
     this.blockListeners = new Set();
     this.txListeners = new Set();
     this.reset();
@@ -89,6 +100,9 @@ export class Blockchain {
   reset() {
     this.blocks = [this.genesis];
     this.state = genesisState(this.genesis);
+    this.snapshots = new Map(); // epoch -> validator-set snapshot fixed at the epoch boundary
+    this.snapshots.set(0, this.makeSnapshot(0));
+    this.futureSnapshots = new Map(); // memo for epochs after the tip's (valid until the tip changes)
     this.txIndex = new Map(); // hash -> { height, index }
     this.addrIndex = new Map(); // address -> [hash] (newest last, capped)
     this.verified = new BoundedSet(5_000); // tx hashes whose signatures/proofs already passed
@@ -111,34 +125,54 @@ export class Blockchain {
 
   get tip() { return this.blocks[this.blocks.length - 1]; }
   get height() { return this.tip.height; }
+  get slot() { return this.tip.slot; }
   onBlock(fn) { this.blockListeners.add(fn); return () => this.blockListeners.delete(fn); }
   onTx(fn) { this.txListeners.add(fn); return () => this.txListeners.delete(fn); }
 
-  // Stake-weighted, deterministic proposer for (height, round). A new round starts every ROUND_TIMEOUT_MS,
-  // so a crashed proposer only delays the chain by one round.
-  proposerFor(prevHash, height, round = 0) {
-    let r = bytesToBig(sha256(utf8(`${prevHash}:${height}:${round}`))) % this.totalStake;
-    for (const v of this.validators) { if (r < BigInt(v.stake)) return v; r -= BigInt(v.stake); }
-    return this.validators[0];
+  // ---- epochs & leader schedule (phase 2) ----
+  makeSnapshot(epoch) {
+    const validators = activeSet(this.state);
+    return { epoch, anchor: this.blocks.at(-1).hash, validators, total: validators.reduce((n, v) => n + v.stake, 0n), power: new Map(validators.map((v) => [v.pub, v.stake])) };
   }
 
-  hasQuorum(power) { return power * 3n > this.totalStake * 2n; }
+  // The validator set for `epoch` is fixed by the last block before the epoch starts.
+  // For epochs after the tip's, that block is (or will be) the current tip, so the snapshot is derived from it.
+  snapshotFor(epoch) {
+    const known = this.snapshots.get(epoch);
+    if (known) return known;
+    const tipEpoch = epochOf(this.tip.slot);
+    if (epoch <= tipEpoch) throw new Error(`no validator snapshot for past epoch ${epoch}`);
+    let s = this.futureSnapshots.get(epoch);
+    if (!s) { s = this.makeSnapshot(epoch); this.futureSnapshots.set(epoch, s); }
+    return s;
+  }
 
-  // Sum of stake behind valid, distinct validator votes for this block.
+  leaderFor(slot) {
+    const snap = this.snapshotFor(epochOf(slot));
+    if (snap.total === 0n) throw new Error('no active validators');
+    let r = bytesToBig(sha256(utf8(`${snap.anchor}:${Math.floor(slot / LEADER_SLOTS)}`))) % snap.total;
+    for (const v of snap.validators) { if (r < v.stake) return v; r -= v.stake; }
+    return snap.validators[0];
+  }
+
+  hasQuorum(power, total) { return total > 0n && power * 3n > total * 2n; }
+
+  // Stake behind valid, distinct precommits for this block (weighted by its epoch's snapshot).
   commitPower(block, { checkSigs = true } = {}) {
-    const votes = block.commit?.votes;
-    if (!Array.isArray(votes)) return 0n;
-    const digest = voteDigest(block.height, block.hash);
+    const cert = block.commit;
+    const snap = this.snapshotFor(epochOf(block.slot));
+    if (!cert || !Number.isSafeInteger(cert.round) || cert.round < 0 || !Array.isArray(cert.votes)) return { power: 0n, total: snap.total };
+    const digest = voteDigest('precommit', block.height, cert.round, block.hash);
     const seen = new Set();
     let power = 0n;
-    for (const v of votes) {
-      const stake = v && this.stakeOf.get(v.validator);
+    for (const v of cert.votes) {
+      const stake = v && snap.power.get(v.validator);
       if (!stake || seen.has(v.validator)) continue;
       if (checkSigs && !schnorrVerify(v.sig, digest, parsePub(v.validator))) continue;
       seen.add(v.validator);
       power += stake;
     }
-    return power;
+    return { power, total: snap.total };
   }
 
   // ---- mempool ----
@@ -172,9 +206,10 @@ export class Blockchain {
   }
 
   // ---- blocks ----
-  // Execute txs on a copy of state. dropInvalid=true when building (skip bad txs), false when validating.
+  // Execute a block's txs on a copy of state: epoch transition, txs, then reward to the leader's stake pool.
   execute(header, txs, { dropInvalid, trusted }) {
     const s = this.state.clone();
+    enterEpoch(s, epochOf(header.slot));
     const included = [];
     let fees = 0n;
     for (const tx of txs) {
@@ -190,58 +225,89 @@ export class Blockchain {
     }
     const reward = blockReward(header.height, s.issued);
     s.issued += reward;
-    s.credit(addressFromPub(header.proposer), reward + fees);
+    distributeReward(s, header.proposer, reward + fees);
+    // Uptime: the leader produced; leaders of skipped slots that were due a heartbeat missed theirs.
+    const prevSlot = this.tip.slot;
+    const prod = s.validators.get(header.proposer);
+    if (prod) prod.produced++;
+    for (let sl = prevSlot + HEARTBEAT_SLOTS; sl < header.slot && sl - prevSlot <= SLOTS_PER_EPOCH; sl++) {
+      const v = s.validators.get(this.leaderFor(sl).pub);
+      if (v) v.missed++;
+    }
     s.height = header.height;
     return { state: s, included, fees, reward };
   }
 
-  // Build and sign (but do not commit) the next block as `proposer` in `round`.
-  buildBlock(round, proposer /* { pubHex, secret } */) {
+  // Build and sign (but do not commit) the next block as the leader of `slot`, using the local PoH recorder.
+  buildBlock(slot, proposer /* { pubHex, secret } */, recorder) {
     const prev = this.tip;
     const height = prev.height + 1;
-    const header = { height, round, prevHash: prev.hash, timestamp: Math.max(this.now(), prev.timestamp + 1 + round * ROUND_TIMEOUT_MS), proposer: proposer.pubHex };
+    const header = { height, slot, prevHash: prev.hash, timestamp: Math.max(this.now(), prev.timestamp + 1), proposer: proposer.pubHex };
     const window = this.mempool.slice(0, MAX_BLOCK_TXS);
     const { included, fees, reward } = this.execute(header, window.map((m) => m.tx), { dropInvalid: true, trusted: false });
-    // Txs that no longer apply can't wedge the mempool.
     const keep = new Set(included.map((i) => i.hash));
     const failed = new Set(window.filter((m) => !keep.has(m.hash)).map((m) => m.hash));
     if (failed.size) this.mempool = this.mempool.filter((m) => !failed.has(m.hash));
-    const block = { ...header, txRoot: merkleRoot(included.map((i) => i.hash)), reward: reward.toString(), fees: fees.toString(), txs: included.map((i) => i.tx) };
+    const hashes = included.map((i) => i.hash);
+    const poh = recorder.segment(hashes); // ticks since the parent, then the txs mixed in order
+    const block = {
+      ...header, txRoot: merkleRoot(hashes), reward: reward.toString(), fees: fees.toString(),
+      pohTicks: poh.ticks, pohEnd: poh.end, poh: { entries: poh.entries }, txs: included.map((i) => i.tx),
+    };
     block.hash = blockHash(block);
     block.signature = schnorrSign(hexToBytes(block.hash), proposer.secret);
     return block;
   }
 
-  // Full validity check of a proposed block against the current tip (everything except the commit certificate).
+  // Full validity check against the current tip (everything except the commit certificate).
   validateBlock(block, { trusted = false } = {}) {
     const prev = this.tip;
     if (!block || typeof block !== 'object') throw new Error('bad block');
     if (block.height !== prev.height + 1) throw new Error('wrong height');
     if (block.prevHash !== prev.hash) throw new Error('wrong parent');
-    if (!Number.isSafeInteger(block.round) || block.round < 0) throw new Error('bad round');
+    if (!Number.isSafeInteger(block.slot) || block.slot <= prev.slot) throw new Error('slot must increase');
     if (!Number.isSafeInteger(block.timestamp) || block.timestamp <= prev.timestamp) throw new Error('bad timestamp');
-    if (block.timestamp < prev.timestamp + block.round * ROUND_TIMEOUT_MS) throw new Error('round started too early');
     if (!trusted && block.timestamp > this.now() + MAX_CLOCK_DRIFT_MS) throw new Error('block from the future');
-    if (block.proposer !== this.proposerFor(prev.hash, block.height, block.round).pub) throw new Error('wrong proposer');
+    if (block.proposer !== this.leaderFor(block.slot).pub) throw new Error('wrong leader for slot');
     if (!Array.isArray(block.txs) || block.txs.length > MAX_BLOCK_TXS) throw new Error('bad txs');
     const hashes = block.txs.map(txHash);
     if (new Set(hashes).size !== hashes.length) throw new Error('duplicate tx in block');
     if (block.txRoot !== merkleRoot(hashes)) throw new Error('bad tx root');
     if (block.hash !== blockHash(block)) throw new Error('bad block hash');
-    if (!trusted && !schnorrVerify(block.signature, hexToBytes(block.hash), parsePub(block.proposer))) throw new Error('bad block signature');
+
+    // Proof of History: the segment must continue from the parent, prove the skipped slots elapsed,
+    // and contain exactly this block's txs, in order.
+    const gap = block.slot - prev.slot;
+    const minTicks = Math.min((gap - 1) * TICKS_PER_SLOT, MAX_PROVEN_SKIP_TICKS);
+    const maxTicks = Math.min(gap * TICKS_PER_SLOT - 1, MAX_BLOCK_TICKS);
+    if (!Number.isSafeInteger(block.pohTicks) || block.pohTicks < minTicks || block.pohTicks > maxTicks) throw new Error(`PoH must prove ${minTicks}-${maxTicks} ticks for this slot`);
+    if (!trusted) {
+      if (!schnorrVerify(block.signature, hexToBytes(block.hash), parsePub(block.proposer))) throw new Error('bad block signature');
+      const poh = verifyPoh(prev.pohEnd, block.poh?.entries, { maxTicks: MAX_BLOCK_TICKS, maxEntries: MAX_BLOCK_TXS + 64 });
+      if (poh.end !== block.pohEnd || poh.ticks !== block.pohTicks) throw new Error('PoH does not match header');
+      if (poh.mixins.length !== hashes.length || poh.mixins.some((m, i) => m !== hashes[i])) throw new Error('PoH tx order does not match block');
+    }
+
     const result = this.execute(block, block.txs, { dropInvalid: false, trusted });
     if (result.fees.toString() !== block.fees || result.reward.toString() !== block.reward) throw new Error('bad reward/fees');
     if (!trusted) for (const h of hashes) this.verified.add(h);
     return { ...result, hashes };
   }
 
-  // Commit a block. Untrusted blocks must carry a commit certificate signed by > 2/3 of stake.
+  // Commit a block. Untrusted blocks must carry a precommit certificate from > 2/3 of the epoch's stake.
   applyBlock(block, { trusted = false, persist = true } = {}) {
     const { state, hashes } = this.validateBlock(block, { trusted });
-    if (!trusted && !this.hasQuorum(this.commitPower(block))) throw new Error('missing 2/3 commit certificate');
+    if (!trusted) {
+      const { power, total } = this.commitPower(block);
+      if (!this.hasQuorum(power, total)) throw new Error('missing 2/3 commit certificate');
+    }
+    const epoch = epochOf(block.slot);
+    if (!this.snapshots.has(epoch)) this.snapshots.set(epoch, this.snapshotFor(epoch)); // freeze at the boundary
+    for (const e of this.snapshots.keys()) if (e < epoch - 2) this.snapshots.delete(e);
 
     this.state = state;
     this.blocks.push(block);
+    this.futureSnapshots.clear();
     hashes.forEach((h, i) => {
       this.txIndex.set(h, { height: block.height, index: i });
       this.verified.delete(h);
@@ -260,16 +326,23 @@ export class Blockchain {
     return block;
   }
 
-  // Standalone helper (all validator keys local): build, sign votes with every local key, commit.
-  produceBlock(localValidators = this.keys.validators) {
+  // Standalone/test helper: the first upcoming slot (>= minSlot) led by a local key gets a block,
+  // precommitted by all local keys.
+  produceBlock(localValidators = this.keys.validators, { minSlot = 0 } = {}) {
     const prev = this.tip;
-    const proposer = this.proposerFor(prev.hash, prev.height + 1, 0);
-    const local = localValidators.find((v) => v.pubHex === proposer.pub);
-    if (!local) return null;
-    const block = this.buildBlock(0, local);
-    const digest = voteDigest(block.height, block.hash);
-    block.commit = { votes: localValidators.map((v) => ({ validator: v.pubHex, sig: schnorrSign(digest, v.secret) })) };
-    return this.applyBlock(block);
+    const start = Math.max(1, minSlot - prev.slot);
+    for (let gap = start; gap < start + 64; gap++) {
+      const leader = this.leaderFor(prev.slot + gap);
+      const local = localValidators.find((v) => v.pubHex === leader.pub);
+      if (!local) continue;
+      const rec = new PohRecorder(prev.pohEnd);
+      if (gap > 1) rec.tick(Math.min((gap - 1) * TICKS_PER_SLOT, MAX_PROVEN_SKIP_TICKS));
+      const block = this.buildBlock(prev.slot + gap, local, rec);
+      const digest = voteDigest('precommit', block.height, 0, block.hash);
+      block.commit = { round: 0, votes: localValidators.map((v) => ({ validator: v.pubHex, sig: schnorrSign(digest, v.secret) })) };
+      return this.applyBlock(block);
+    }
+    return null;
   }
 
   // ---- queries ----
@@ -277,7 +350,7 @@ export class Blockchain {
     const loc = this.txIndex.get(hash);
     if (loc) {
       const block = this.blocks[loc.height];
-      return { status: 'confirmed', height: loc.height, blockHash: block.hash, timestamp: block.timestamp, tx: block.txs[loc.index] };
+      return { status: 'confirmed', height: loc.height, slot: block.slot, pohIndex: loc.index, blockHash: block.hash, timestamp: block.timestamp, tx: block.txs[loc.index] };
     }
     const m = this.mempool.find((x) => x.hash === hash);
     return m ? { status: 'pending', tx: m.tx, receivedAt: m.receivedAt } : null;
@@ -291,8 +364,9 @@ export class Blockchain {
       circulating: s.circulating().toString(),
       staked: s.staked.toString(),
       shieldedPool: s.pool.toString(),
-      // Invariant: every unit ever minted is in an account, in stake, or in the shielded pool.
-      conserved: s.circulating() + s.staked + s.pool === s.issued,
+      burned: s.burned.toString(),
+      // Invariant: every unit ever minted is in an account, staked/unbonding, in the shielded pool, or burned.
+      conserved: s.circulating() + s.staked + s.pool + s.burned === s.issued,
       nextReward: blockReward(this.height + 1, s.issued).toString(),
     };
   }

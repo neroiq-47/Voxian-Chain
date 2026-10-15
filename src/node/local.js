@@ -3,7 +3,7 @@
 import { createNode } from './compose.js';
 
 // Keyed by path: on GitHub Pages every project site of a user shares one origin.
-const KEY = `voxian.devnet.blocks.v2:${location.pathname}`;
+const KEY = `voxian.devnet.blocks.v3:${location.pathname}`; // v3: PoH + PoS chain format
 
 class LocalStorageStorage {
   constructor() { this.blocks = []; this.warned = false; }
@@ -20,7 +20,11 @@ class LocalStorageStorage {
     this.blocks = [...blocks];
     try { localStorage.setItem(KEY, JSON.stringify(this.blocks)); } catch { /* ignore */ }
   }
-  async clear() { this.blocks = []; try { localStorage.removeItem(KEY); } catch { /* ignore */ } }
+  async clear() { this.blocks = []; try { localStorage.removeItem(KEY); localStorage.removeItem(KEY + ':meta'); } catch { /* ignore */ } }
+  loadMeta(key) { try { return JSON.parse(localStorage.getItem(KEY + ':meta') || '{}')[key] ?? null; } catch { return null; } }
+  saveMeta(key, value) {
+    try { const all = JSON.parse(localStorage.getItem(KEY + ':meta') || '{}'); all[key] = value; localStorage.setItem(KEY + ':meta', JSON.stringify(all)); } catch { /* ignore */ }
+  }
 }
 
 export async function createLocalNode() {

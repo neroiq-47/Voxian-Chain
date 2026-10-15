@@ -5,6 +5,7 @@ import { addressFromPub, isAddress, parsePub } from './keys.js';
 import { txSighash, txHash, txSize, noteId, authDigest } from './tx.js';
 import { MIN_FEE, MAX_TX_BYTES, MAX_SHIELDED_INPUTS, MAX_SHIELDED_OUTPUTS, MAX_MEMO, MAX_REF, MIN_AUTH_VALIDITY_S, parseUnits } from './params.js';
 import { verifyOutputRange, balanceExcess } from '../zk/shielded.js';
+import { applyStakingTx, STAKING_TYPES } from './staking.js';
 
 export class State {
   constructor() {
@@ -13,9 +14,16 @@ export class State {
     this.spent = new Set(); // spent note ids (nullifiers)
     this.authNonces = new Set(); // used x402 authorization nonces
     this.issued = 0n; // total VOX ever minted
-    this.staked = 0n; // locked validator stake
+    this.staked = 0n; // bonded + unbonding stake (locked)
     this.pool = 0n; // total value inside the shielded pool
+    this.burned = 0n; // slashed VOX destroyed (never re-minted)
     this.height = 0;
+    this.epoch = 0;
+    this.validators = new Map(); // pub -> validator record (see staking.js)
+    this.delegations = new Map(); // validator pub -> Map(delegator address -> bigint)
+    this.unbonding = []; // { address, validator, amount, releaseEpoch }
+    this.evidence = new Set(); // processed equivocation keys
+    this.slashes = []; // slashing log
     this.stats = { txCount: 0, transfers: 0, shieldedTxs: 0, x402Payments: 0, x402PublicVolume: 0n, x402PrivatePayments: 0 };
   }
 
@@ -26,6 +34,12 @@ export class State {
     s.spent = new Set(this.spent);
     s.authNonces = new Set(this.authNonces);
     s.issued = this.issued; s.staked = this.staked; s.pool = this.pool; s.height = this.height;
+    s.burned = this.burned; s.epoch = this.epoch;
+    for (const [k, v] of this.validators) s.validators.set(k, { ...v });
+    for (const [k, m] of this.delegations) s.delegations.set(k, new Map(m));
+    s.unbonding = this.unbonding.map((u) => ({ ...u }));
+    s.evidence = new Set(this.evidence);
+    s.slashes = this.slashes.slice();
     s.stats = { ...this.stats };
     return s;
   }
@@ -77,6 +91,10 @@ const TYPE_KEYS = {
   shield: ['type', 'from', 'amount', 'fee', 'nonce', 'output', 'openingProof', 'sig'],
   shielded: ['type', 'inputs', 'outputs', 'publicOut', 'fee', 'ref', 'sigs'],
   auth_transfer: ['type', 'relayer', 'fee', 'nonce', 'auth', 'authSig', 'sig'],
+  validator_register: ['type', 'from', 'name', 'commissionBps', 'amount', 'fee', 'nonce', 'sig'],
+  stake: ['type', 'from', 'validator', 'amount', 'fee', 'nonce', 'sig'],
+  unstake: ['type', 'from', 'validator', 'amount', 'fee', 'nonce', 'sig'],
+  evidence: ['type', 'from', 'voteA', 'voteB', 'fee', 'nonce', 'sig'],
 };
 
 /**
@@ -93,6 +111,17 @@ export function applyTx(state, tx, ctx) {
   const verify = !ctx.skipCrypto;
   const fee = checkFee(tx);
   const sighash = txSighash(tx);
+
+  if (STAKING_TYPES.has(tx.type)) {
+    const pub = parsePub(tx.from);
+    for (const k of TYPE_KEYS[tx.type]) if (k !== 'sig' && tx[k] === undefined) fail(`missing field "${k}"`);
+    if ((tx.type === 'stake' || tx.type === 'unstake')) parsePub(tx.validator);
+    if (verify && !schnorrVerify(tx.sig, sighash, pub)) cryptoFail('invalid signature');
+    applyStakingTx(state, tx, fee, ctx); // validates fully before mutating (same contract as below)
+    state.stats.stakingTxs = (state.stats.stakingTxs ?? 0) + 1;
+    state.stats.txCount++;
+    return { hash, fee };
+  }
 
   switch (tx.type) {
     case 'transfer': {
@@ -226,6 +255,7 @@ export function txAddresses(tx) {
     if (tx.type === 'shield') out.add(addressFromPub(tx.from));
     if (tx.type === 'shielded' && tx.publicOut) out.add(tx.publicOut.to);
     if (tx.type === 'auth_transfer') { out.add(addressFromPub(tx.relayer)); out.add(addressFromPub(tx.auth.from)); out.add(tx.auth.to); }
+    if (STAKING_TYPES.has(tx.type)) out.add(addressFromPub(tx.from));
   } catch { /* malformed txs never reach the chain */ }
   return [...out];
 }

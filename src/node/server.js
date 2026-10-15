@@ -30,7 +30,19 @@ export class FileStorage {
     fs.mkdirSync(this.dir, { recursive: true });
     fs.writeFileSync(this.file, blocks.map((b) => JSON.stringify(b) + '\n').join(''));
   }
-  async clear() { if (this.file) fs.rmSync(this.file, { force: true }); }
+  async clear() { if (this.file) { fs.rmSync(this.file, { force: true }); fs.rmSync(this.metaFile(), { force: true }); } }
+  // Small synchronous key/value metadata (the validator signing log must hit disk before votes go out).
+  metaFile() { return this.file.replace(/\.jsonl$/, '.meta.json'); }
+  readMeta() { try { return JSON.parse(fs.readFileSync(this.metaFile(), 'utf8')); } catch { return {}; } }
+  loadMeta(key) { return this.readMeta()[key] ?? null; }
+  saveMeta(key, value) {
+    fs.mkdirSync(this.dir, { recursive: true });
+    const all = this.readMeta();
+    all[key] = value;
+    const tmp = this.metaFile() + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(all));
+    fs.renameSync(tmp, this.metaFile());
+  }
 }
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.json': 'application/json', '.png': 'image/png', '.ico': 'image/x-icon', '.md': 'text/markdown; charset=utf-8' };
@@ -69,12 +81,17 @@ const envList = (v) => (v ? v.split(',').map((s) => s.trim()).filter(Boolean) : 
 export async function startServer({
   port = PORT, host = HOST, storage, dataDir = process.env.VOXIAN_DATA_DIR ? path.resolve(process.env.VOXIAN_DATA_DIR) : DATA_DIR,
   secret = process.env.VOXIAN_DEVNET_SECRET || DEFAULT_DEVNET_SECRET,
-  validators = process.env.VOXIAN_VALIDATORS || 'all', peers = envList(process.env.VOXIAN_PEERS), name = process.env.VOXIAN_NODE_NAME || '', quiet = false,
+  validators = process.env.VOXIAN_VALIDATORS || 'all', validatorSeed = process.env.VOXIAN_VALIDATOR_SEED, peers = envList(process.env.VOXIAN_PEERS), name = process.env.VOXIAN_NODE_NAME || '', quiet = false,
 } = {}) {
   const fileStorage = storage ? null : new FileStorage(dataDir);
   const log = quiet ? () => {} : (m) => console.log(`[${name || 'voxian'}] ${m}`);
-  const node = createNode({ storage: storage ?? fileStorage, secret, validators, peers, log });
-  fileStorage?.bind(node.chain.genesis.hash);
+  // Bind the file storage to this genesis before the consensus engine reads its signing log.
+  if (fileStorage) {
+    const { makeGenesis, devnetKeys } = await import('../chain/blockchain.js');
+    fileStorage.bind(makeGenesis(devnetKeys(secret)).hash);
+  }
+  const selfUrl = process.env.VOXIAN_PUBLIC_URL || (peers.length ? `http://127.0.0.1:${port}` : null);
+  const node = createNode({ storage: storage ?? fileStorage, secret, validators, validatorSeed, peers, selfUrl, log });
   await node.init();
   node.start();
 

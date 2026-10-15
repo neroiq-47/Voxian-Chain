@@ -80,6 +80,22 @@ export class Wallet {
     return { tx, disclosures, spentIds: inputs.map((n) => n.id) };
   }
 
+  // ---- Proof of Stake ----
+  registerValidator({ name, commissionBps = 1000, amount, nonce, fee = MIN_FEE.validator_register }) {
+    return signTx({ type: 'validator_register', from: this.pubHex, name, commissionBps, amount: String(amount), fee: String(fee), nonce }, this.secret);
+  }
+
+  stake({ validator, amount, nonce, fee = MIN_FEE.stake }) {
+    return signTx({ type: 'stake', from: this.pubHex, validator, amount: String(amount), fee: String(fee), nonce }, this.secret);
+  }
+
+  unstake({ validator, amount, nonce, fee = MIN_FEE.unstake }) {
+    return signTx({ type: 'unstake', from: this.pubHex, validator, amount: String(amount), fee: String(fee), nonce }, this.secret);
+  }
+
+  // The same key as a consensus validator (for running the wallet's validator on an in-browser node).
+  asValidator(name) { return { name, pubHex: this.pubHex, secret: this.secret, address: this.address }; }
+
   // x402 "exact" scheme: sign an authorization a facilitator can settle (payer pays no gas).
   signAuthorization({ to, value, resource, validSeconds = 300, now = Date.now() }) {
     const t = Math.floor(now / 1000);
