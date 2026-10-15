@@ -1,0 +1,18 @@
+{
+  "name": "voxian-chain",
+  "version": "0.1.0",
+  "description": "Voxian \u2014 a demo Layer 1 blockchain combining zero-knowledge privacy with x402 payments for AI agents, APIs and digital services.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/node/server.js",
+    "dev": "VOXIAN_RESET=1 node src/node/server.js",
+    "test": "node --test test/*.test.js",
+    "agent": "node scripts/agent-demo.js",
+    "build:pages": "node scripts/build-pages.js",
+    "cluster": "node scripts/cluster.js"
+  }
+}
