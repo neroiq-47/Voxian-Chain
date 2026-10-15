@@ -6,8 +6,8 @@ import { formatVox } from '../chain/params.js';
 const DEFAULT_TEXT = 'Voxian is a proposed Layer 1 blockchain for private, verifiable payments. AI agents can pay for APIs with x402 and keep sensitive details private with zero-knowledge proofs. Payments are fast and programmable. Developers get simple, secure tools. Some people fear crypto is risky, but strong privacy and good engineering build trust.';
 
 export class VoxAgent {
-  constructor({ fetch, api, wallet, budget, scheme = 'auto', log = () => {} }) {
-    Object.assign(this, { fetch, api, wallet, budget: BigInt(budget), scheme, log });
+  constructor({ fetch, api, wallet, budget, scheme = 'auto', log = () => {}, ownedNotes }) {
+    Object.assign(this, { fetch, api, wallet, budget: BigInt(budget), scheme, log, ownedNotes });
     this.spent = 0n;
     this.receipts = [];
   }
@@ -48,9 +48,9 @@ export class VoxAgent {
       this.log({ kind: 'call', message: `${service.method} ${service.path}${input.query ?? ''}` });
       try {
         const init = service.method === 'POST' ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input.body) } : { method: 'GET' };
-        const r = await x402Fetch(this.fetch, service.path.slice(1) + (input.query ?? ''), init, { wallet: this.wallet, api: this.api, scheme: this.scheme, maxAmount: this.remaining, onStep: this.log });
-        this.spent += r.price;
-        this.receipts.push({ service: service.name, scheme: r.scheme, price: r.price, tx: r.receipt?.transaction });
+        const r = await x402Fetch(this.fetch, service.path.slice(1) + (input.query ?? ''), init, { wallet: this.wallet, api: this.api, scheme: this.scheme, maxAmount: this.remaining, onStep: this.log, ownedNotes: this.ownedNotes });
+        this.spent += r.cost; // price + any fee paid by the agent
+        this.receipts.push({ service: service.name, scheme: r.scheme, price: r.price, cost: r.cost, tx: r.receipt?.transaction });
         results.push({ service, data: r.data });
         this.log({ kind: 'result', message: `${service.name}: ${brief(service.id, r.data)}`, data: r.data });
       } catch (e) {

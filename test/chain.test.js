@@ -4,6 +4,7 @@ import { Blockchain, devnetKeys, MemoryStorage } from '../src/chain/blockchain.j
 import { Wallet } from '../src/wallet/wallet.js';
 import { signTx } from '../src/chain/tx.js';
 import { UNIT, MAX_SUPPLY, blockReward, parseVox, formatVox, HALVING_INTERVAL } from '../src/chain/params.js';
+import { merkleRoot } from '../src/chain/tx.js';
 
 async function setup() {
   const keys = devnetKeys('test-secret');
@@ -13,6 +14,12 @@ async function setup() {
   const notesOf = (w) => w.scanNotes([...chain.pending.notes.values()].map((n) => ({ ...n, spent: chain.pending.spent.has(n.id) })));
   return { keys, storage, chain, fund, notesOf };
 }
+
+test('merkle root commits to the leaf count (no duplicate-leaf ambiguity)', () => {
+  const h = (c) => c.repeat(64);
+  assert.notEqual(merkleRoot([h('a'), h('b'), h('c')]), merkleRoot([h('a'), h('b'), h('c'), h('c')]));
+  assert.notEqual(merkleRoot([]), merkleRoot([h('0')]));
+});
 
 test('VOX parameters follow the white paper', () => {
   assert.equal(MAX_SUPPLY, 210_000_000n * 100_000_000n);
@@ -108,4 +115,31 @@ test('blocks are signed, linked and replayable from storage', async () => {
   fresh.applyBlock(structuredClone(chain.blocks[1]), { trusted: false, persist: false });
   forged.reward = String(1000n * UNIT);
   assert.throws(() => fresh.applyBlock(forged, { trusted: false, persist: false }));
+});
+
+test('audit regressions: malleability, expiring-auth spam, per-sender limits, merkle', async () => {
+  const { chain, fund, notesOf, keys } = await setup();
+  const a = Wallet.generate(), b = Wallet.generate();
+  fund(a, 100);
+  chain.produceBlock();
+  chain.submitTx(a.shield({ amount: 10n * UNIT, nonce: 0 }));
+  chain.produceBlock();
+  const { tx } = a.buildShielded({ owned: notesOf(a), recipients: [{ zaddress: b.zaddress, value: UNIT }] });
+  // Third parties can't change the tx hash (and thus note ids) by adding fields.
+  assert.throws(() => chain.submitTx({ ...tx, sigs: { ...tx.sigs, x: 1 } }), /sigs fields/);
+  assert.throws(() => chain.submitTx({ ...tx, outputs: tx.outputs.map((o) => ({ ...o, junk: 1 })) }), /output fields/);
+  // A corrupted proof is cached as rejected: resubmission is refused without re-verifying.
+  const bad = structuredClone(tx);
+  bad.outputs[0].rp = bad.outputs[0].rp.slice(0, -2) + (bad.outputs[0].rp.endsWith('00') ? '01' : '00');
+  assert.throws(() => chain.submitTx(bad), /invalid input signature/); // proofs are signed, so the cheap check catches it
+  assert.throws(() => chain.submitTx(bad), /previously rejected/);
+  chain.submitTx(tx);
+
+  // Authorizations that would expire before inclusion are not admitted (free mempool spam).
+  const auth = a.signAuthorization({ to: b.address, value: 1n, resource: '/paid/x', validSeconds: 5 });
+  assert.throws(() => chain.submitTx(signTx({ type: 'auth_transfer', relayer: keys.facilitator.pubHex, fee: '10000', nonce: chain.pending.account(keys.facilitator.address).nonce, auth: auth.authorization, authSig: auth.signature }, keys.facilitator.secret)), /at least 30s/);
+
+  // Per-sender mempool cap.
+  let n = chain.pending.account(a.address).nonce;
+  assert.throws(() => { for (let i = 0; i < 100; i++) chain.submitTx(a.transfer({ to: b.address, amount: 1n, nonce: n++ })); }, /too many pending/);
 });

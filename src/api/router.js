@@ -8,9 +8,12 @@ import { H } from '../crypto/secp256k1.js';
 import { RANGE_BITS } from '../zk/rangeproof.js';
 import { scanOutput } from '../zk/shielded.js';
 import { paymentRequirements, decodeHeader, encodeHeader, PAYMENT_HEADER, X402_VERSION } from '../x402/protocol.js';
+import { blocksFrom } from '../chain/consensus.js';
+import { canonicalJSON } from '../crypto/encoding.js';
 
 const FAUCET_AMOUNT = parseVox('1000');
 const FAUCET_COOLDOWN_MS = 30_000;
+const FAUCET_GLOBAL_PER_MIN = 20; // new addresses are free, so also cap total faucet throughput
 
 const ok = (body, headers = {}) => ({ status: 200, headers, body });
 const err = (status, message, extra = {}) => ({ status, headers: {}, body: { error: message, ...extra } });
@@ -32,8 +35,13 @@ function summarizeTx(tx, hash, extra = {}) {
 
 const blockSummary = (b) => ({ height: b.height, hash: b.hash, timestamp: b.timestamp, proposer: b.proposer, txCount: b.txs.length, reward: b.reward, fees: b.fees });
 
-export function createRouter({ chain, facilitator, services, payee, keys }) {
+export function createRouter({ chain, consensus, facilitator, services, payee, keys }) {
   const faucetLast = new Map();
+  let faucetWindow = [];
+  // The public facilitator endpoints only settle payments for this node's own services (otherwise anyone
+  // could make the facilitator relay, and pay gas for, arbitrary self-payments).
+  const knownRequirements = new Set(services.flatMap((s) => paymentRequirements(s, payee).map((r) => canonicalJSON(r))));
+  const isKnownRequirement = (r) => { try { return knownRequirements.has(canonicalJSON(r)); } catch { return false; } };
   const validators = chain.genesis.validators;
   const validatorName = new Map(validators.map((v) => [v.pub, v.name]));
 
@@ -55,20 +63,21 @@ export function createRouter({ chain, facilitator, services, payee, keys }) {
       return ok({
         height: chain.height, tipHash: chain.tip.hash, tipTime: chain.tip.timestamp, mempool: chain.mempool.length,
         avgBlockMs: Math.round(span), supply: chain.supply(), accounts: chain.state.accounts.size, notes: chain.state.notes.size,
-        spentNotes: chain.state.spent.size, ...s, x402PublicVolume: s.x402PublicVolume.toString(),
+        spentNotes: chain.state.spent.size, consensus: { mode: consensus.mode, lastCommit: consensus.lastCommit, peersOnline: consensus.status().peers.filter((p) => p.ok).length, peers: consensus.peers.size }, ...s, x402PublicVolume: s.x402PublicVolume.toString(),
       });
     }],
 
     ['GET', /^\/api\/blocks$/, (req) => {
       const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
-      return ok({ blocks: chain.blocks.slice(-limit).reverse().map((b) => ({ ...blockSummary(b), proposerName: validatorName.get(b.proposer) ?? 'genesis' })) });
+      return ok({ blocks: chain.blocks.slice(-limit).reverse().map((b) => ({ ...blockSummary(b), round: b.round, signers: b.commit?.votes.length ?? 0, proposerName: validatorName.get(b.proposer) ?? 'genesis' })) });
     }],
 
     ['GET', /^\/api\/blocks\/([0-9a-f]+)$/, (req, [id]) => {
       const b = id.length === 64 ? chain.blocks.find((x) => x.hash === id) : chain.blocks[Number(id)];
       if (!b) return err(404, 'block not found');
       const { allocations, validators: vs, ...rest } = b;
-      return ok({ ...rest, proposerName: validatorName.get(b.proposer) ?? 'genesis', allocations, validators: vs, txs: b.txs.map((t) => ({ ...summarizeTx(t, txHash(t)), raw: displayTx(t) })) });
+      const commit = b.commit ? { signers: b.commit.votes.map((v) => validatorName.get(v.validator) ?? v.validator), stakePct: Number((chain.commitPower(b, { checkSigs: false }) * 10000n) / chain.totalStake) / 100 } : null;
+      return ok({ ...rest, commit, proposerName: validatorName.get(b.proposer) ?? 'genesis', allocations, validators: vs, txs: b.txs.map((t) => ({ ...summarizeTx(t, txHash(t)), raw: displayTx(t) })) });
     }],
 
     ['GET', /^\/api\/tx\/([0-9a-f]{64})$/, (req, [hash]) => {
@@ -99,6 +108,10 @@ export function createRouter({ chain, facilitator, services, payee, keys }) {
     ['POST', /^\/api\/faucet$/, (req) => {
       const address = req.body?.address;
       if (!isAddress(address)) return err(400, 'valid vox1… address required');
+      const now = Date.now();
+      faucetWindow = faucetWindow.filter((t) => now - t < 60_000);
+      if (faucetWindow.length >= FAUCET_GLOBAL_PER_MIN) return err(429, 'faucet is busy: global rate limit reached, try again in a minute');
+      for (const [a, t] of faucetLast) if (now - t >= FAUCET_COOLDOWN_MS) faucetLast.delete(a);
       const last = faucetLast.get(address) ?? 0;
       if (Date.now() - last < FAUCET_COOLDOWN_MS) return err(429, `faucet cooldown: try again in ${Math.ceil((FAUCET_COOLDOWN_MS - (Date.now() - last)) / 1000)}s`);
       const f = keys.faucet;
@@ -106,6 +119,7 @@ export function createRouter({ chain, facilitator, services, payee, keys }) {
       try {
         const hash = chain.submitTx(tx);
         faucetLast.set(address, Date.now());
+        faucetWindow.push(Date.now());
         return ok({ hash, amount: FAUCET_AMOUNT.toString(), formatted: formatVox(FAUCET_AMOUNT) });
       } catch (e) { return err(503, 'faucet unavailable: ' + e.message); }
     }],
@@ -126,8 +140,21 @@ export function createRouter({ chain, facilitator, services, payee, keys }) {
     }],
 
     ['GET', /^\/x402\/supported$/, () => ok(facilitator.supported())],
-    ['POST', /^\/x402\/verify$/, (req) => ok(facilitator.verify(req.body?.paymentPayload, req.body?.paymentRequirements ?? {}))],
-    ['POST', /^\/x402\/settle$/, (req) => ok(facilitator.settle(req.body?.paymentPayload, req.body?.paymentRequirements ?? {}))],
+    ['POST', /^\/x402\/verify$/, (req) => (isKnownRequirement(req.body?.paymentRequirements)
+      ? ok(facilitator.verify(req.body?.paymentPayload, req.body.paymentRequirements))
+      : ok({ isValid: false, invalidReason: 'unknown paymentRequirements: this facilitator only settles payments for its listed services' }))],
+    ['POST', /^\/x402\/settle$/, (req) => (isKnownRequirement(req.body?.paymentRequirements)
+      ? ok(facilitator.settle(req.body?.paymentPayload, req.body.paymentRequirements))
+      : ok({ success: false, errorReason: 'unknown paymentRequirements', network: NETWORK, transaction: '' }))],
+
+    // ---- validator cluster ----
+    ['GET', /^\/api\/consensus$/, () => ok(consensus.status())],
+    ['GET', /^\/p2p\/status$/, () => ok(consensus.status())],
+    ['GET', /^\/p2p\/blocks$/, (req) => ok({ blocks: blocksFrom(chain, Number(req.query.from), Number(req.query.limit) || 50) })],
+    ['POST', /^\/p2p\/tx$/, (req) => ok(consensus.onTx(req.body))],
+    ['POST', /^\/p2p\/proposal$/, (req) => ok(consensus.onProposal(req.body))],
+    ['POST', /^\/p2p\/vote$/, (req) => ok(consensus.onVote(req.body))],
+    ['POST', /^\/p2p\/commit$/, (req) => ok(consensus.onCommit(req.body))],
   ];
 
   async function paid(req, service) {

@@ -20,14 +20,20 @@ This repository is a working **devnet MVP**. It has a real chain, real ZK proofs
 ## Quick start
 
 ```bash
-npm start            # full node + web app on http://localhost:8402  (Node ≥ 20, zero dependencies)
+npm start            # standalone full node + web app on http://localhost:8402  (Node ≥ 20, zero dependencies)
+npm run cluster      # 4-validator BFT cluster, one process per validator (ports 8402-8405)
 npm test             # crypto, consensus, ZK and end-to-end x402 tests
 npm run agent        # (with the node running) an AI agent funds itself and buys data over x402
 npm run agent -- "what is the BTC price?" --scheme zk-shielded
 npm run build:pages  # static build in dist/ (the app boots an in-browser node when no backend exists)
 ```
 
-Environment variables: `PORT` (8402), `HOST`, `VOXIAN_DATA_DIR` (`./data`), `VOXIAN_DEVNET_SECRET` (derives the validator, faucet and facilitator keys), and `VOXIAN_RESET=1` to wipe the chain.
+Environment variables:
+- `PORT` (default 8402), `HOST`, `VOXIAN_DATA_DIR` (default `./data`), `VOXIAN_RESET=1` to wipe the chain.
+- `VOXIAN_DEVNET_SECRET` derives the validator, faucet and facilitator keys.
+- `VOXIAN_VALIDATORS`: `all` (standalone, the default), `none` (observer/RPC node), or names such as `aurora,borealis`.
+- `VOXIAN_PEERS`: comma-separated peer node URLs.
+- `VOXIAN_NODE_NAME`: a log label.
 
 ## What's inside
 
@@ -44,12 +50,30 @@ web/            single-page app: overview, wallet, x402 market, AI agent, explor
 ```
 
 ### Layer 1
-- Blocks are linked by hash, carry a Merkle transaction root, and are signed by the proposer (Schnorr over secp256k1).
-- A stake-weighted, deterministic proposer is chosen from 3 devnet validators.
+- Blocks are linked by hash, carry a Merkle transaction root (domain-separated, committing to the tx count), and are signed by the proposer (Schnorr over secp256k1).
 - Blocks come every ~2 s while transactions are waiting, plus a heartbeat block every 10 s.
 - Issuance is 50 VOX per block, halving every 2.1M blocks, and is capped at 210M VOX. The devnet genesis allocates 5% to the faucet and stakes 1M VOX across the validators.
 - Consensus checks a supply invariant on every query: `issued = circulating + staked + shielded pool`.
 - Blocks are stored in an append-only `data/blocks.jsonl` and fully replayed and validated on restart.
+
+### Validator cluster (BFT consensus, instant finality)
+`src/chain/consensus.js` runs a simplified Tendermint-style protocol among 4 devnet validators (stake 30/25/25/20%):
+
+1. **Propose:** for each `(height, round)` a stake-weighted, deterministic proposer builds and signs a block, then gossips it to all peers.
+2. **Vote:** every validator re-executes the block (signatures, ZK proofs, balances). If it's valid, the validator signs a vote for `(height, blockHash)`. It votes at most once per height; if it later becomes proposer at that height, it re-proposes the block it already voted for.
+3. **Commit:** once votes from **more than 2/3 of stake** are collected, the block is committed with its commit certificate and gossiped. Committed blocks are final, so there are no reorgs. Every node, including a syncing one, rejects a block without a valid 2/3 certificate.
+4. **Rounds:** if the proposer is down, a new round opens every 3 s with a different proposer.
+5. **Catch-up:** a restarted or partitioned node fetches committed blocks from peers (`/p2p/blocks`) and verifies each certificate.
+
+Any 3 of the 4 validators exceed 2/3, so the cluster keeps finalizing with **one validator down**. With two down it **halts safely** (no blocks, no forks) and resumes once a quorum returns. The tests cover all of these cases. Nodes talk over `POST /p2p/{tx,proposal,vote,commit}`, `GET /p2p/status` and `GET /p2p/blocks`. `GET /api/consensus` shows cluster state, peers and the last commit.
+
+`npm start` runs the same engine in standalone mode (all four validator keys on one node). The in-browser node does the same. `npm run cluster` runs one process per validator. To watch fault tolerance, kill one node, then kill a second, then restart them.
+
+Devnet simplifications:
+- Every validator key derives from the shared devnet secret.
+- Votes are not persisted, so a crashed validator could vote twice at one height after a restart.
+- There is no lock release across rounds. That is safe, but a vote split at one height could stall it.
+- There is no slashing.
 
 ### Zero-knowledge privacy (shielded pool)
 | Transaction | What it does | What the chain sees |
@@ -88,7 +112,7 @@ Paid routes: `/paid/oracle/price`, `/paid/ai/sentiment`, `/paid/ai/summarize`, `
 ## Roadmap (from the white paper)
 1. Finalize the technical design
 2. Build a working payment proof of concept ✅ *(this devnet)*
-3. Launch a testnet (multi-node P2P networking, real validator set)
+3. Launch a testnet (independent validator keys, persisted votes and slashing on top of the validator cluster)
 4. Complete independent security reviews
 5. Only then assess mainnet readiness
 

@@ -28,4 +28,5 @@ export class ChainClient {
   faucet(address) { return this.request('api/faucet', { method: 'POST', body: { address } }); }
   services() { return this.request('api/services'); }
   revenue() { return this.request('api/services/revenue'); }
+  consensus() { return this.request('api/consensus'); }
 }

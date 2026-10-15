@@ -3,16 +3,18 @@ import { encodeHeader, decodeHeader, SCHEME_EXACT, SCHEME_ZK, PAYMENT_HEADER, RE
 import { formatVox } from '../chain/params.js';
 
 /**
- * opts: { wallet, api (ChainClient), scheme: 'exact' | 'zk-shielded' | 'auto', maxAmount (bigint units), onStep(evt) }
- * Returns { status, data, receipt, requirement, scheme, price }.
+ * opts: { wallet, api (ChainClient), scheme: 'exact' | 'zk-shielded' | 'auto', maxAmount (bigint units, includes payer-paid fees),
+ *         onStep(evt), ownedNotes() -> owned notes (optional cache; defaults to a full scan) }
+ * Returns { status, data, receipt, requirement, scheme, price, cost } where cost = price + any fee the payer pays.
  */
 export async function x402Fetch(fetchFn, url, init = {}, opts) {
   const { wallet, api, scheme = 'auto', maxAmount, onStep = () => {} } = opts;
+  const ownedNotes = opts.ownedNotes ?? (async () => wallet.scanNotes(await api.notes()));
   const first = await fetchFn(url, init);
   if (first.status !== 402) {
     const data = await first.json().catch(() => ({}));
     if (!first.ok) throw new Error(data.error || `HTTP ${first.status}`);
-    return { status: first.status, data, price: 0n };
+    return { status: first.status, data, price: 0n, cost: 0n };
   }
 
   const challenge = await first.json();
@@ -21,7 +23,7 @@ export async function x402Fetch(fetchFn, url, init = {}, opts) {
 
   let pick = scheme;
   if (scheme === 'auto') {
-    const owned = wallet.scanNotes(await api.notes()).filter((n) => !n.spent);
+    const owned = (await ownedNotes()).filter((n) => !n.spent);
     const price = BigInt(challenge.accepts[0].maxAmountRequired);
     const shieldedBal = owned.reduce((s, n) => s + n.value, 0n);
     pick = shieldedBal >= price + BigInt(challenge.accepts.find((a) => a.scheme === SCHEME_ZK)?.extra?.minFee ?? 0) ? SCHEME_ZK : SCHEME_EXACT;
@@ -29,14 +31,16 @@ export async function x402Fetch(fetchFn, url, init = {}, opts) {
   const req = challenge.accepts.find((a) => a.scheme === pick);
   if (!req) throw new Error(`server does not accept scheme ${pick}`);
   const price = BigInt(req.maxAmountRequired);
-  if (maxAmount !== undefined && price > maxAmount) throw new Error(`price ${formatVox(price)} VOX exceeds limit ${formatVox(maxAmount)} VOX`);
+  const fee = pick === SCHEME_ZK ? BigInt(req.extra?.minFee ?? 0) : 0n; // exact: the facilitator pays gas
+  const cost = price + fee;
+  if (maxAmount !== undefined && cost > maxAmount) throw new Error(`cost ${formatVox(cost)} VOX exceeds limit ${formatVox(maxAmount)} VOX`);
 
   let payload;
   if (pick === SCHEME_EXACT) {
     payload = wallet.signAuthorization({ to: req.payTo, value: price, resource: req.resource, validSeconds: req.maxTimeoutSeconds });
     onStep({ kind: 'sign', message: `Signed transfer authorization for ${formatVox(price)} VOX (facilitator pays gas)` });
   } else {
-    const owned = wallet.scanNotes(await api.notes());
+    const owned = await ownedNotes();
     onStep({ kind: 'prove', message: 'Building shielded payment: stealth output + Pedersen commitment + ZK range proofs…' });
     const { tx, disclosures } = wallet.buildShielded({ owned, recipients: [{ zaddress: req.payTo, value: price }], ref: req.extra.ref, fee: BigInt(req.extra.minFee) });
     payload = { transaction: tx, disclosure: disclosures[0] };
@@ -50,5 +54,5 @@ export async function x402Fetch(fetchFn, url, init = {}, opts) {
   const receipt = rh ? decodeHeader(rh) : null;
   if (second.status !== 200) throw new Error(`payment rejected: ${data.error || second.status}`);
   onStep({ kind: 'settled', message: `Settled on-chain · tx ${receipt?.transaction?.slice(0, 16)}…`, receipt });
-  return { status: second.status, data, receipt, requirement: req, scheme: pick, price };
+  return { status: second.status, data, receipt, requirement: req, scheme: pick, price, cost };
 }

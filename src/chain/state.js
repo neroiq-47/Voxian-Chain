@@ -3,7 +3,7 @@
 import { mulH, Point, schnorrVerify } from '../crypto/secp256k1.js';
 import { addressFromPub, isAddress, parsePub } from './keys.js';
 import { txSighash, txHash, txSize, noteId, authDigest } from './tx.js';
-import { MIN_FEE, MAX_TX_BYTES, MAX_SHIELDED_INPUTS, MAX_SHIELDED_OUTPUTS, MAX_MEMO, MAX_REF, parseUnits } from './params.js';
+import { MIN_FEE, MAX_TX_BYTES, MAX_SHIELDED_INPUTS, MAX_SHIELDED_OUTPUTS, MAX_MEMO, MAX_REF, MIN_AUTH_VALIDITY_S, parseUnits } from './params.js';
 import { verifyOutputRange, balanceExcess } from '../zk/shielded.js';
 
 export class State {
@@ -47,6 +47,11 @@ export class State {
 }
 
 const fail = (msg) => { throw new Error(msg); };
+// Crypto failures are tagged so the node can cache them and cheaply reject resubmissions.
+const cryptoFail = (msg) => { throw Object.assign(new Error(msg), { crypto: true }); };
+const exactKeys = (o, keys, what) => {
+  if (!o || typeof o !== 'object' || Array.isArray(o) || Object.keys(o).sort().join(',') !== [...keys].sort().join(',')) fail(`bad ${what} fields`);
+};
 
 function checkFee(tx) {
   const fee = parseUnits(tx.fee, { allowZero: true });
@@ -59,7 +64,7 @@ function checkNonce(acct, nonce) {
 }
 
 function checkOutputShape(o, needRangeProof) {
-  if (!o || typeof o !== 'object') fail('bad output');
+  exactKeys(o, needRangeProof ? ['P', 'R', 'C', 'enc', 'rp'] : ['P', 'R', 'C', 'enc'], 'output');
   for (const k of ['P', 'R', 'C']) Point.fromHex(o[k]);
   if (typeof o.enc !== 'string' || !/^[0-9a-f]{16}$/.test(o.enc)) fail('bad encrypted amount');
   if (needRangeProof && typeof o.rp !== 'string') fail('missing range proof');
@@ -99,7 +104,7 @@ export function applyTx(state, tx, ctx) {
       const acct = state.account(from);
       checkNonce(acct, tx.nonce);
       if (acct.balance < amount + fee) fail('insufficient balance');
-      if (verify && !schnorrVerify(tx.sig, sighash, pub)) fail('invalid signature');
+      if (verify && !schnorrVerify(tx.sig, sighash, pub)) cryptoFail('invalid signature');
       state.accounts.set(from, { balance: acct.balance - amount - fee, nonce: acct.nonce + 1 });
       state.credit(tx.to, amount);
       state.stats.transfers++;
@@ -111,15 +116,14 @@ export function applyTx(state, tx, ctx) {
       const from = addressFromPub(tx.from);
       const amount = parseUnits(tx.amount);
       checkOutputShape(tx.output, false);
-      if (tx.output.rp !== undefined) fail('shield outputs carry no range proof');
       const acct = state.account(from);
       checkNonce(acct, tx.nonce);
       if (acct.balance < amount + fee) fail('insufficient balance');
       if (verify) {
-        if (!schnorrVerify(tx.sig, sighash, pub)) fail('invalid signature');
+        if (!schnorrVerify(tx.sig, sighash, pub)) cryptoFail('invalid signature');
         // Prove C - amount*H = blind*G: the commitment really holds exactly `amount`.
         const opening = Point.fromHex(tx.output.C).sub(mulH(amount));
-        if (!schnorrVerify(tx.openingProof, sighash, opening)) fail('invalid commitment opening proof');
+        if (!schnorrVerify(tx.openingProof, sighash, opening)) cryptoFail('invalid commitment opening proof');
       }
       const note = storedNote(tx.output, hash, 0, ctx.height);
       if (state.notes.has(note.id)) fail('duplicate note');
@@ -150,14 +154,16 @@ export function applyTx(state, tx, ctx) {
       if (outputs.length === 0 && pubAmount === 0n) fail('tx has no outputs');
       if (tx.ref !== undefined && (typeof tx.ref !== 'string' || tx.ref.length > MAX_REF)) fail('bad ref');
       if (state.pool < pubAmount + fee) fail('shielded pool underflow');
-      if (!tx.sigs || !Array.isArray(tx.sigs.inputs) || tx.sigs.inputs.length !== inputs.length) fail('bad sigs');
+      exactKeys(tx.sigs, ['inputs', 'balance'], 'sigs'); // no extra keys: tx hash (and note ids) can't be malleated
+      if (!Array.isArray(tx.sigs.inputs) || tx.sigs.inputs.length !== inputs.length) fail('bad sigs');
       if (verify) {
+        // Cheapest checks first; the ~100ms-per-output range proofs run last.
         notes.forEach((n, i) => {
-          if (!schnorrVerify(tx.sigs.inputs[i], sighash, Point.fromHex(n.P))) fail('invalid input signature');
+          if (!schnorrVerify(tx.sigs.inputs[i], sighash, Point.fromHex(n.P))) cryptoFail('invalid input signature');
         });
-        for (const o of outputs) if (!verifyOutputRange(o)) fail('invalid range proof');
         const excess = balanceExcess(notes.map((n) => n.C), outputs.map((o) => o.C), fee + pubAmount);
-        if (excess.isZero() || !schnorrVerify(tx.sigs.balance, sighash, excess)) fail('invalid balance proof');
+        if (excess.isZero() || !schnorrVerify(tx.sigs.balance, sighash, excess)) cryptoFail('invalid balance proof');
+        for (const o of outputs) if (!verifyOutputRange(o)) cryptoFail('invalid range proof');
       }
       for (const id of inputs) state.spent.add(id);
       outputs.forEach((o, i) => { const n = storedNote(o, hash, i, ctx.height); state.notes.set(n.id, n); });
@@ -184,6 +190,8 @@ export function applyTx(state, tx, ctx) {
       if (!Number.isSafeInteger(a.validAfter) || !Number.isSafeInteger(a.validBefore)) fail('bad validity window');
       const nowSec = Math.floor(ctx.timestamp / 1000);
       if (nowSec < a.validAfter || nowSec >= a.validBefore) fail('authorization expired or not yet valid');
+      // At mempool admission demand some remaining validity, so it can't expire before inclusion (free spam).
+      if (ctx.admission && a.validBefore - nowSec < MIN_AUTH_VALIDITY_S) fail(`authorization must remain valid for at least ${MIN_AUTH_VALIDITY_S}s`);
       if (state.authNonces.has(a.nonce)) fail('authorization already used');
       const rAcct = state.account(relayer);
       checkNonce(rAcct, tx.nonce);
@@ -192,8 +200,8 @@ export function applyTx(state, tx, ctx) {
       if (sameAccount ? pAcct.balance < value + fee : pAcct.balance < value) fail('payer has insufficient balance');
       if (!sameAccount && rAcct.balance < fee) fail('relayer cannot pay fee');
       if (verify) {
-        if (!schnorrVerify(tx.authSig, authDigest(a), payerPub)) fail('invalid authorization signature');
-        if (!schnorrVerify(tx.sig, sighash, relayerPub)) fail('invalid relayer signature');
+        if (!schnorrVerify(tx.authSig, authDigest(a), payerPub)) cryptoFail('invalid authorization signature');
+        if (!schnorrVerify(tx.sig, sighash, relayerPub)) cryptoFail('invalid relayer signature');
       }
       const r = state.account(relayer);
       state.accounts.set(relayer, { balance: r.balance - fee, nonce: r.nonce + 1 });

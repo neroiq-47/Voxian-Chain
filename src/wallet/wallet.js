@@ -59,9 +59,11 @@ export class Wallet {
     if (total < need) throw new Error('insufficient shielded balance');
     if (inputs.length > 8) throw new Error('too many notes needed; consolidate first');
 
-    const created = recipients.map((r) => createOutput(r.zaddress, BigInt(r.value)));
+    const created = recipients.map((r, i) => ({ ...createOutput(r.zaddress, BigInt(r.value)), recipient: i }));
     const change = total - need;
     if (change > 0n) created.push(createOutput(this.zaddress, change));
+    // Shuffle so output position doesn't reveal which output is the payment and which is change.
+    for (let i = created.length - 1; i > 0; i--) { const j = randomBytes(1)[0] % (i + 1); [created[i], created[j]] = [created[j], created[i]]; }
 
     const tx = {
       type: 'shielded',
@@ -74,7 +76,7 @@ export class Wallet {
     const h = txSighash(tx);
     const z = mod(inputs.reduce((s, n) => s + n.blind, 0n) - created.reduce((s, c) => s + c.blind, 0n), N);
     tx.sigs = { inputs: inputs.map((n) => schnorrSign(h, n.oneTimeSecret)), balance: schnorrSign(h, z) };
-    const disclosures = recipients.map((_, i) => ({ outputIndex: i, txSecret: scalarToHex(created[i].txSecret) }));
+    const disclosures = recipients.map((_, i) => { const k = created.findIndex((c) => c.recipient === i); return { outputIndex: k, txSecret: scalarToHex(created[k].txSecret) }; });
     return { tx, disclosures, spentIds: inputs.map((n) => n.id) };
   }
 

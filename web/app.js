@@ -26,12 +26,16 @@ function toast(msg, kind = '') {
   toast.timer = setTimeout(() => { t.hidden = true; }, kind === 'error' ? 6000 : 3500);
 }
 
+// One wallet operation at a time: concurrent builds would reuse the same nonce or the same notes.
+let walletBusy = false;
 async function busy(btn, label, fn) {
+  if (walletBusy) { toast('Another transaction is still being built. One moment…', 'error'); return; }
+  walletBusy = true;
   const old = btn?.textContent;
   if (btn) { btn.disabled = true; btn.textContent = label; }
   try { await nextFrame(); return await fn(); }
   catch (e) { toast(e.message, 'error'); }
-  finally { if (btn) { btn.disabled = false; btn.textContent = old; } }
+  finally { walletBusy = false; if (btn) { btn.disabled = false; btn.textContent = old; } }
 }
 
 const typeTag = (t) => `<span class="tag ${esc(t.type)}">${esc({ transfer: 'transfer', shield: 'shield', shielded: t.ref?.startsWith('x402:') ? 'x402 · private' : 'private', auth_transfer: 'x402 · exact' }[t.type] ?? t.type)}</span>${t.pending ? ' <span class="tag pending">pending</span>' : ''}`;
@@ -43,11 +47,17 @@ const noteCache = new Map(); // note id -> scan result (or null if not ours)
 let myNotes = [];
 let currentView = '';
 
+const SEED_KEY = `voxian.wallet.seed:${location.pathname}`; // per path: GitHub Pages sites share an origin
+function saveSeed(w) {
+  try { localStorage.setItem(SEED_KEY, w.seedHex); }
+  catch { toast('Could not save your wallet seed in this browser. Use "Show seed" to back it up.', 'error'); }
+}
+
 function loadWallet() {
   let seed = null;
-  try { seed = localStorage.getItem('voxian.wallet.seed'); } catch { /* storage unavailable */ }
+  try { seed = localStorage.getItem(SEED_KEY); } catch { /* storage unavailable */ }
   const w = seed ? new Wallet(seed) : Wallet.generate();
-  try { localStorage.setItem('voxian.wallet.seed', w.seedHex); } catch { /* ignore */ }
+  saveSeed(w);
   return w;
 }
 
@@ -55,7 +65,7 @@ function setWallet(w) {
   wallet = w;
   noteCache.clear();
   myNotes = [];
-  try { localStorage.setItem('voxian.wallet.seed', w.seedHex); } catch { /* ignore */ }
+  saveSeed(w);
 }
 
 async function scanMyNotes() {
@@ -86,7 +96,7 @@ views.overview = {
       <div class="card"><h3>Supply</h3><div id="supply"></div></div>
     </div>
     <div class="grid g2 section">
-      <div class="card"><h3>Validators (stake-weighted PoS)</h3><div id="validators"></div></div>
+      <div class="card"><div class="row between"><h3>Validator cluster · BFT finality</h3><span class="small muted" id="cluster-mode"></span></div><div id="validators"></div><p class="small muted" id="cluster-note" style="margin-bottom:0"></p></div>
       <div class="card"><h3>VOX token</h3><div class="kv">
         <div>Ticker</div><div><b>VOX</b></div>
         <div>Max supply</div><div>210,000,000 VOX (hard cap)</div>
@@ -97,7 +107,7 @@ views.overview = {
       </div></div>
     </div>`,
   async update() {
-    const [s, { blocks }] = await Promise.all([api.stats(), api.blocks(8)]);
+    const [s, { blocks }, c] = await Promise.all([api.stats(), api.blocks(8), api.consensus()]);
     $('#stats').innerHTML = [
       ['Block height', `#${s.height.toLocaleString()}`, `avg block ${(s.avgBlockMs / 1000).toFixed(1)}s · mempool ${s.mempool}`],
       ['Transactions', s.txCount.toLocaleString(), `${s.transfers} transfers · ${s.shieldedTxs} shielded`],
@@ -115,16 +125,19 @@ views.overview = {
       <div>Shielded</div><div>${vox(s.supply.shieldedPool)}</div>
       <div>Next reward</div><div>${vox(s.supply.nextReward)}</div>
       <div>Conservation</div><div class="${s.supply.conserved ? 'ok' : 'bad'}">${s.supply.conserved ? '✓ issued = circulating + staked + shielded' : '✗ mismatch'}</div></div>`;
-    $('#validators').innerHTML = `<table><tr><th>Validator</th><th>Stake</th><th>Weight</th></tr>${info.validators.map((v) => {
-      const total = info.validators.reduce((a, x) => a + BigInt(x.stake), 0n);
-      return `<tr><td>${esc(v.name)}<div class="small">${addrLink(v.address)}</div></td><td>${vox(v.stake)}</td><td>${(Number((BigInt(v.stake) * 1000n) / total) / 10).toFixed(1)}%</td></tr>`;
-    }).join('')}</table>`;
+    const total = info.validators.reduce((a, x) => a + BigInt(x.stake), 0n);
+    const signed = new Set(c.lastCommit?.signers ?? []);
+    $('#cluster-mode').textContent = c.mode === 'cluster' ? `cluster · ${c.peers.filter((p) => p.ok).length}/${c.peers.length} peers online` : 'standalone (all validators on this node)';
+    $('#validators').innerHTML = `<table><tr><th>Validator</th><th>Stake</th><th>Weight</th><th>Last block</th></tr>${info.validators.map((v) => `
+      <tr><td>${esc(v.name.replace('vox-validator-', ''))}${c.localValidators.includes(v.name) ? ' <span class="tag">this node</span>' : ''}<div class="small">${addrLink(v.address)}</div></td><td>${vox(v.stake)}</td>
+      <td>${(Number((BigInt(v.stake) * 1000n) / total) / 10).toFixed(1)}%</td><td>${signed.has(v.name) ? '<span class="ok">✓ signed</span>' : c.lastCommit ? '<span class="muted">—</span>' : ''}</td></tr>`).join('')}</table>`;
+    $('#cluster-note').innerHTML = c.lastCommit ? `Block #${c.lastCommit.height} finalized by ${c.lastCommit.signers.length} validators with <b>${c.lastCommit.stakePct}%</b> of stake (needs &gt; 66.67%). Round ${c.round} · proposer rotates every ${c.roundTimeoutMs / 1000}s if silent.` : 'Waiting for the first commit…';
   },
 };
 
 function blockTable(blocks) {
-  return `<table><tr><th>Height</th><th>Hash</th><th>Proposer</th><th>Txs</th><th>Age</th></tr>${blocks.map((b) => `
-    <tr class="click" data-go="#explorer/${b.height}"><td><b>#${b.height}</b></td><td class="mono">${esc(short(b.hash, 8, 4))}</td><td>${esc(b.proposerName)}</td><td>${b.txCount}</td><td class="muted">${b.height === 0 ? 'genesis' : ago(b.timestamp)}</td></tr>`).join('')}</table>`;
+  return `<table><tr><th>Height</th><th>Hash</th><th>Proposer</th><th>Txs</th><th>Finality</th><th>Age</th></tr>${blocks.map((b) => `
+    <tr class="click" data-go="#explorer/${b.height}"><td><b>#${b.height}</b></td><td class="mono">${esc(short(b.hash, 8, 4))}</td><td>${esc(b.proposerName.replace('vox-validator-', ''))}${b.round ? ` <span class="tag" title="proposer rotated after a timeout">r${b.round}</span>` : ''}</td><td>${b.txCount}</td><td>${b.height === 0 ? '—' : `<span class="ok" title="validator signatures in the commit certificate">✓ ${b.signers}/${info.validators.length}</span>`}</td><td class="muted">${b.height === 0 ? 'genesis' : ago(b.timestamp)}</td></tr>`).join('')}</table>`;
 }
 
 views.wallet = {
@@ -262,7 +275,7 @@ async function callService(btn) {
   const scheme = btn.dataset.pay;
   const trace = $('#m-trace');
   trace.innerHTML = '';
-  const add = (cls, title, body) => { trace.insertAdjacentHTML('beforeend', `<div class="step ${cls}"><b>${title}</b>${body ? `<pre>${esc(body)}</pre>` : ''}</div>`); };
+  const add = (cls, title, body) => { trace.insertAdjacentHTML('beforeend', `<div class="step ${cls}"><b>${esc(title)}</b>${body ? `<pre>${esc(body)}</pre>` : ''}</div>`); };
   const tracedFetch = async (url, init = {}) => {
     const pay = init.headers?.[PAYMENT_HEADER];
     if (pay) {
@@ -281,8 +294,8 @@ async function callService(btn) {
     const input = card.querySelector('textarea, input');
     const init = s.method === 'POST' ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(JSON.parse(input.value || '{}')) } : { method: 'GET' };
     const url = s.path.slice(1) + (s.method === 'GET' && input.value ? (input.value.startsWith('?') ? input.value : '?' + input.value) : '');
-    const r = await x402Fetch(tracedFetch, url, init, { wallet, api, scheme, onStep: (e) => (e.kind === 'prove' || e.kind === 'sign') && add('', e.message) });
-    toast(`Paid ${vox(r.price)} via ${r.scheme} · tx ${short(r.receipt?.transaction)}`, 'success');
+    const r = await x402Fetch(tracedFetch, url, init, { wallet, api, scheme, ownedNotes: scanMyNotes, onStep: (e) => (e.kind === 'prove' || e.kind === 'sign') && add('', e.message) });
+    toast(`Paid ${vox(r.price)}${r.cost > r.price ? ` + ${vox(r.cost - r.price)} fee` : ''} via ${r.scheme} · tx ${short(r.receipt?.transaction)}`, 'success');
     refresh();
   });
 }
@@ -323,12 +336,12 @@ views.agent = {
         $('#a-report').textContent = '…';
         $('#a-receipts').innerHTML = '';
         const agent = new VoxAgent({
-          fetch: fetchFn, api, wallet, budget: parseVox(form.budget.value), scheme: form.scheme.value,
+          fetch: fetchFn, api, wallet, budget: parseVox(form.budget.value), scheme: form.scheme.value, ownedNotes: scanMyNotes,
           log: (ev) => { log.insertAdjacentHTML('beforeend', `<div class="ln"><span class="k ${esc(ev.kind)}">${esc(ev.kind)}</span><span>${esc(ev.message)}</span></div>`); log.scrollTop = log.scrollHeight; },
         });
         const r = await agent.run(form.goal.value);
         $('#a-report').textContent = r.report;
-        $('#a-receipts').innerHTML = r.receipts.length ? `<table><tr><th>Service</th><th>Scheme</th><th>Paid</th><th>Tx</th></tr>${r.receipts.map((x) => `<tr><td>${esc(x.service)}</td><td><span class="tag ${x.scheme === 'exact' ? 'x402' : 'shielded'}">${esc(x.scheme)}</span></td><td>${vox(x.price)}</td><td>${x.tx ? `<a class="mono" href="#explorer/${esc(x.tx)}">${esc(short(x.tx, 8, 4))}</a>` : ''}</td></tr>`).join('')}</table>` : '';
+        $('#a-receipts').innerHTML = r.receipts.length ? `<table><tr><th>Service</th><th>Scheme</th><th>Cost</th><th>Tx</th></tr>${r.receipts.map((x) => `<tr><td>${esc(x.service)}</td><td><span class="tag ${x.scheme === 'exact' ? 'x402' : 'shielded'}">${esc(x.scheme)}</span></td><td>${vox(x.cost)}</td><td>${x.tx ? `<a class="mono" href="#explorer/${esc(x.tx)}">${esc(short(x.tx, 8, 4))}</a>` : ''}</td></tr>`).join('')}</table>` : '';
         refresh();
       });
     };
@@ -348,7 +361,7 @@ views.explorer = {
     $('#x-mempool').innerHTML = txs.length ? txTable(txs) : '<p class="muted small">Empty. All transactions are confirmed.</p>';
   },
   bind(arg) {
-    $('#f-search').onsubmit = (e) => { e.preventDefault(); const q = e.target.q.value.trim(); if (q) location.hash = `#explorer/${q}`; };
+    $('#f-search').onsubmit = (e) => { e.preventDefault(); const q = e.target.q.value.trim(); if (q) location.hash = `#explorer/${encodeURIComponent(q)}`; };
     if (arg) showExplorerItem(arg);
   },
 };
@@ -366,7 +379,9 @@ async function showExplorerItem(q) {
         <div>Hash</div><div class="mono break">${esc(b.hash)}</div><div>Parent</div><div class="mono break">${b.height ? `<a href="#explorer/${b.height - 1}">${esc(b.prevHash)}</a>` : esc(b.prevHash)}</div>
         <div>Time</div><div>${new Date(b.timestamp).toLocaleString()}</div><div>Proposer</div><div>${esc(b.proposerName)}</div>
         <div>Reward + fees</div><div>${vox(b.reward)} + ${vox(b.fees)}</div><div>Tx root</div><div class="mono break">${esc(b.txRoot)}</div>
-        <div>Signature</div><div class="mono break small">${esc(b.signature || '—')}</div></div>
+        <div>Signature</div><div class="mono break small">${esc(b.signature || '—')}</div>
+        <div>Round</div><div>${b.round ?? 0}</div>
+        <div>Finality</div><div>${b.commit ? `<span class="ok">✓ final</span>, signed by ${b.commit.signers.map((n) => esc(n.replace('vox-validator-', ''))).join(', ')} (${b.commit.stakePct}% of stake)` : 'genesis'}</div></div>
         ${b.allocations ? `<h3 style="margin-top:14px">Genesis allocations</h3><table>${b.allocations.map((a) => `<tr><td>${esc(a.label)}</td><td>${addrLink(a.address)}</td><td>${vox(a.amount)}</td></tr>`).join('')}</table>` : ''}
         <h3 style="margin-top:14px">Transactions (${b.txs.length})</h3>${b.txs.length ? txTable(b.txs) : '<p class="muted small">No transactions.</p>'}</div>`;
     } else if (/^[0-9a-f]{64}$/.test(q)) {
@@ -395,7 +410,8 @@ views.about = {
     <section class="hero"><h1>About <span>Voxian</span></h1><p>Voxian is a proposed Layer 1 blockchain designed for private, verifiable digital payments in an increasingly automated world.</p></section>
     <div class="grid g2 section">
       <div class="card"><h3>What this MVP implements</h3><ul class="small">
-        <li><b>Layer 1 chain:</b> blocks, mempool, Merkle tx roots, stake-weighted proposer selection, Schnorr-signed blocks, halving issuance hard-capped at 210M VOX.</li>
+        <li><b>Layer 1 chain:</b> blocks, mempool, Merkle tx roots, Schnorr-signed blocks, halving issuance hard-capped at 210M VOX.</li>
+        <li><b>Validator cluster:</b> BFT consensus with instant finality. Stake-weighted proposers, rotating rounds on timeout, &gt; 2/3-stake commit certificates, and catch-up sync. Survives one of four validators going down.</li>
         <li><b>ZK privacy:</b> confidential notes with Pedersen commitments, 55-bit zero-knowledge range proofs (CDS OR-proofs), balance proofs, stealth one-time addresses and encrypted amounts.</li>
         <li><b>x402 payments:</b> HTTP 402 challenges, an <code>exact</code> scheme (gasless signed authorizations relayed by a facilitator) and a <code>zk-shielded</code> scheme (private note payments with selective disclosure to the payee).</li>
         <li><b>AI agents:</b> an autonomous agent discovers paid APIs, plans, and pays per request within a budget.</li>
@@ -410,9 +426,11 @@ views.about = {
 
 // ---------- router & refresh loop ----------
 async function route(force = false) {
-  const [name, ...rest] = (location.hash.slice(1) || 'overview').split('/');
-  const arg = rest.join('/') ? decodeURIComponent(rest.join('/')) : undefined;
-  const view = views[name] ?? views.overview;
+  const [rawName, ...rest] = (location.hash.slice(1) || 'overview').split('/');
+  const name = Object.hasOwn(views, rawName) ? rawName : 'overview';
+  let arg;
+  try { arg = rest.join('/') ? decodeURIComponent(rest.join('/')) : undefined; } catch { arg = rest.join('/'); }
+  const view = views[name];
   const key = `${name}/${arg ?? ''}`;
   if (key === currentView && !force) return;
   currentView = key;

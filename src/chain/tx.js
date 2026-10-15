@@ -1,6 +1,6 @@
 // Transaction encoding, hashing and signing.
 import { canonicalJSON, utf8, concatBytes } from '../crypto/encoding.js';
-import { sha256, sha256Hex, taggedHash } from '../crypto/sha256.js';
+import { sha256Hex, taggedHash } from '../crypto/sha256.js';
 import { schnorrSign } from '../crypto/secp256k1.js';
 import { CHAIN_ID } from './params.js';
 
@@ -27,13 +27,14 @@ export function signTx(tx, secret) {
 // x402 "exact" authorization (EIP-3009 style): the payer signs a transfer that a facilitator relays.
 export const authDigest = (auth) => taggedHash('Voxian/x402/auth', utf8(CHAIN_ID), utf8(canonicalJSON(auth)));
 
+// Domain-separated leaves and nodes, an odd node is promoted (not duplicated), and the root commits to
+// the leaf count, which avoids the CVE-2012-2459 duplicate-leaf ambiguity.
 export function merkleRoot(hashes) {
-  if (hashes.length === 0) return sha256Hex('');
-  let level = hashes.map((h) => sha256(utf8(h)));
+  let level = hashes.map((h) => taggedHash('Voxian/merkle-leaf', utf8(h)));
   while (level.length > 1) {
     const next = [];
-    for (let i = 0; i < level.length; i += 2) next.push(sha256(concatBytes(level[i], level[i + 1] ?? level[i])));
+    for (let i = 0; i < level.length; i += 2) next.push(i + 1 < level.length ? taggedHash('Voxian/merkle-node', level[i], level[i + 1]) : level[i]);
     level = next;
   }
-  return Array.from(level[0], (b) => b.toString(16).padStart(2, '0')).join('');
+  return sha256Hex(concatBytes(utf8(`${hashes.length}:`), level[0] ?? new Uint8Array(32)));
 }

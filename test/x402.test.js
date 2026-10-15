@@ -12,7 +12,7 @@ import { UNIT } from '../src/chain/params.js';
 const until = async (cond) => { for (let i = 0; i < 80; i++) { if (await cond()) return; await new Promise((r) => setTimeout(r, 100)); } throw new Error('timeout'); };
 
 test('x402 end to end over HTTP: 402 challenge, exact + zk-shielded payments, agent', async (t) => {
-  const s = await startServer({ port: 0, host: '127.0.0.1', storage: new MemoryStorage(), secret: 'x402-test' });
+  const s = await startServer({ port: 0, host: '127.0.0.1', storage: new MemoryStorage(), secret: 'x402-test', quiet: true });
   t.after(() => s.close());
   const base = `http://127.0.0.1:${s.server.address().port}/`;
   const f = (u, i) => fetch(new URL(u, base), i);
@@ -25,6 +25,13 @@ test('x402 end to end over HTTP: 402 challenge, exact + zk-shielded payments, ag
   const body = await r.json();
   assert.equal(body.x402Version, 1);
   assert.deepEqual(body.accepts.map((a) => a.scheme), ['exact', 'zk-shielded']);
+
+  // Malformed paths don't crash the node; the facilitator refuses requirements it didn't issue.
+  assert.equal((await f('%')).status, 400);
+  const forged = { ...body.accepts[0], payTo: w.address, maxAmountRequired: '1' };
+  const settle = await (await f('x402/settle', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ paymentPayload: {}, paymentRequirements: forged }) })).json();
+  assert.equal(settle.success, false);
+  assert.match(settle.errorReason, /unknown paymentRequirements/);
 
   // Garbage / unfunded payments are refused
   assert.equal((await f('paid/random', { headers: { 'x-payment': 'not-base64!!' } })).status, 402);

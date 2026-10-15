@@ -10,6 +10,12 @@ export class Facilitator {
   constructor(chain, key) {
     this.chain = chain;
     this.key = key; // facilitator account: relays "exact" payments and pays their gas
+    this.checked = new Map(); // bounded: tx hash -> true for dry-runs that passed full crypto checks
+  }
+
+  remember(hash) {
+    this.checked.set(hash, true);
+    if (this.checked.size > 500) this.checked.delete(this.checked.keys().next().value);
   }
 
   supported() {
@@ -56,9 +62,9 @@ export class Facilitator {
       // Dry-run the settlement tx against the pending state (signatures, proofs, balances, replay).
       const tx = this.buildTx(payment);
       const hash = txHash(tx);
-      applyTx(this.chain.pending.clone(), tx, { height: this.chain.height + 1, timestamp: Date.now(), skipCrypto: this.chain.verified.has(hash) });
-      this.chain.verified.add(hash); // signatures/proofs checked once; settle() reuses the result
-      return { isValid: true, payer };
+      applyTx(this.chain.pending.clone(), tx, { height: this.chain.height + 1, timestamp: Date.now(), skipCrypto: this.checked.has(hash), admission: true });
+      this.remember(hash);
+      return { isValid: true, payer, hash };
     } catch (e) {
       return { isValid: false, invalidReason: e.message };
     }
@@ -68,7 +74,9 @@ export class Facilitator {
     const v = this.verify(payment, req);
     if (!v.isValid) return { success: false, errorReason: v.invalidReason, network: NETWORK, transaction: '' };
     try {
-      const hash = this.chain.submitTx(this.buildTx(payment));
+      const tx = this.buildTx(payment);
+      if (this.checked.has(txHash(tx))) this.chain.verified.add(txHash(tx)); // proofs already checked in verify()
+      const hash = this.chain.submitTx(tx);
       return { success: true, transaction: hash, network: NETWORK, payer: v.payer };
     } catch (e) {
       return { success: false, errorReason: e.message, network: NETWORK, transaction: '' };

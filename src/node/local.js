@@ -2,7 +2,8 @@
 // Used automatically when the web app is served statically (e.g. GitHub Pages) with no backend.
 import { createNode } from './compose.js';
 
-const KEY = 'voxian.devnet.blocks.v1';
+// Keyed by path: on GitHub Pages every project site of a user shares one origin.
+const KEY = `voxian.devnet.blocks.v2:${location.pathname}`;
 
 class LocalStorageStorage {
   constructor() { this.blocks = []; this.warned = false; }
@@ -14,6 +15,10 @@ class LocalStorageStorage {
     this.blocks.push(block);
     try { localStorage.setItem(KEY, JSON.stringify(this.blocks)); }
     catch { if (!this.warned) { this.warned = true; console.warn('[voxian] browser storage full; chain continues in memory only'); } }
+  }
+  async replaceAll(blocks) {
+    this.blocks = [...blocks];
+    try { localStorage.setItem(KEY, JSON.stringify(this.blocks)); } catch { /* ignore */ }
   }
   async clear() { this.blocks = []; try { localStorage.removeItem(KEY); } catch { /* ignore */ } }
 }
@@ -36,5 +41,5 @@ export async function createLocalNode() {
     return new Response(out.body === null ? null : JSON.stringify(out.body), { status: out.status, headers: { 'content-type': 'application/json', ...out.headers } });
   }
 
-  return { node, fetch: localFetch, reset: async () => { await storage.clear(); location.reload(); } };
+  return { node, fetch: localFetch, reset: async () => { await storage.clear(); location.reload(); }, get storageFull() { return storage.warned; } };
 }

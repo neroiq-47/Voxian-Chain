@@ -23,6 +23,11 @@ export const BLOCK_INTERVAL_MS = 2_000; // produce a block this often while txs 
 export const EMPTY_BLOCK_MS = 10_000; // heartbeat block when idle
 export const MAX_BLOCK_TXS = 200;
 export const MAX_MEMPOOL = 1_000;
+export const MAX_PENDING_PER_SENDER = 64; // per public key ('shielded' counts as one sender)
+export const MIN_AUTH_VALIDITY_S = 30; // x402 authorizations must stay valid this long after admission
+// Consensus: a new proposer round opens every ROUND_TIMEOUT_MS; blocks are final at > 2/3 stake of votes.
+export const ROUND_TIMEOUT_MS = 3_000;
+export const MAX_CLOCK_DRIFT_MS = 15_000;
 export const MAX_TX_BYTES = 200_000;
 export const MAX_SHIELDED_INPUTS = 8;
 export const MAX_SHIELDED_OUTPUTS = 4;
