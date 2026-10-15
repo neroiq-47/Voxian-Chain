@@ -118,7 +118,7 @@ test('phase 4: register, delegate, earn rewards, enter the schedule next epoch, 
   // Next epoch: the new validator is in the snapshot and leads some slots.
   const nextEpochStart = (epochOf(chain.slot) + 1) * SLOTS_PER_EPOCH;
   const all = [...keys.validators, op.asValidator('agent-node')];
-  chain.produceBlock(all, { minSlot: nextEpochStart });
+  while (chain.slot < nextEpochStart) chain.produceBlock(all, { minSlot: Math.min(chain.slot + 100, nextEpochStart) });
   const snap = chain.snapshotFor(epochOf(chain.slot));
   assert.ok(snap.power.has(op.pubHex));
   let opSlot = null;
@@ -141,7 +141,7 @@ test('phase 4: register, delegate, earn rewards, enter the schedule next epoch, 
   const entry = chain.state.unbonding.find((u) => u.address === del.address);
   assert.equal(entry.releaseEpoch, chain.state.epoch + UNBONDING_EPOCHS);
   const before = chain.state.account(del.address).balance;
-  chain.produceBlock(all, { minSlot: entry.releaseEpoch * SLOTS_PER_EPOCH });
+  while (chain.slot < entry.releaseEpoch * SLOTS_PER_EPOCH) chain.produceBlock(all, { minSlot: Math.min(chain.slot + 100, entry.releaseEpoch * SLOTS_PER_EPOCH) });
   assert.equal(chain.state.unbonding.length, 0);
   assert.ok(chain.state.account(del.address).balance - before >= 5_000n * UNIT);
   assert.ok(chain.supply().conserved);
@@ -153,11 +153,14 @@ test('phase 5: equivocation evidence slashes once, burns, rewards the reporter a
   fund(reporter, 10);
   chain.produceBlock();
   const bad = keys.validators[1]; // borealis
-  const vote = (hash) => ({ kind: 'precommit', height: 5, round: 0, blockHash: hash, validator: bad.pubHex, sig: schnorrSign(voteDigest('precommit', 5, 0, hash), bad.secret) });
+  const h = chain.height, parent = chain.blocks[h - 1].hash; // equivocation at an existing height of this chain
+  const vote = (hash, p = parent) => ({ kind: 'precommit', height: h, round: 0, blockHash: hash, parent: p, validator: bad.pubHex, sig: schnorrSign(voteDigest('precommit', h, 0, hash, p), bad.secret) });
   const voteA = vote('a'.repeat(64)), voteB = vote('b'.repeat(64));
   const ev = (a, b) => signTx({ type: 'evidence', from: reporter.pubHex, voteA: a, voteB: b, fee: '10000', nonce: nonce(reporter) }, reporter.secret);
   assert.throws(() => chain.submitTx(ev(voteA, voteA)), /do not conflict/);
   assert.throws(() => chain.submitTx(ev(voteA, { ...voteB, sig: voteA.sig })), /validly signed/);
+  // Votes from another chain instance (different parent) can't be used as evidence here.
+  assert.throws(() => chain.submitTx(ev(vote('c'.repeat(64), 'e'.repeat(64)), vote('d'.repeat(64), 'e'.repeat(64)))), /not from this chain/);
   const bonded = chain.state.validators.get(bad.pubHex).selfStake;
   const repBefore = chain.state.account(reporter.address).balance;
   chain.submitTx(ev(voteA, voteB));
@@ -172,6 +175,7 @@ test('phase 5: equivocation evidence slashes once, burns, rewards the reporter a
   assert.ok(chain.supply().conserved, 'issued = circulating + staked + shielded + burned');
   assert.throws(() => chain.submitTx(ev(voteB, voteA)), /already processed/);
   // Jailed validators leave the next epoch's schedule.
-  chain.produceBlock(undefined, { minSlot: (epochOf(chain.slot) + 1) * SLOTS_PER_EPOCH });
+  const target = (epochOf(chain.slot) + 1) * SLOTS_PER_EPOCH;
+  while (chain.slot < target) chain.produceBlock(undefined, { minSlot: Math.min(chain.slot + 100, target) });
   assert.ok(!chain.snapshotFor(epochOf(chain.slot)).power.has(bad.pubHex));
 });

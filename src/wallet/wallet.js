@@ -93,6 +93,10 @@ export class Wallet {
     return signTx({ type: 'unstake', from: this.pubHex, validator, amount: String(amount), fee: String(fee), nonce }, this.secret);
   }
 
+  unjail({ nonce, fee = MIN_FEE.unjail }) {
+    return signTx({ type: 'unjail', from: this.pubHex, fee: String(fee), nonce }, this.secret);
+  }
+
   // The same key as a consensus validator (for running the wallet's validator on an in-browser node).
   asValidator(name) { return { name, pubHex: this.pubHex, secret: this.secret, address: this.address }; }
 

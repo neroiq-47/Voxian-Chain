@@ -104,7 +104,7 @@ test('blocks without a valid 2/3 precommit certificate are rejected', async () =
   const leader = ch.leaderFor(ch.slot + 1);
   const key = node.keys.validators.find((v) => v.pubHex === leader.pub);
   const block = ch.buildBlock(ch.slot + 1, key, new PohRecorder(ch.tip.pohEnd));
-  const pc = (v, round = 0, hash = block.hash, kind = 'precommit') => ({ validator: v.pubHex, sig: schnorrSign(voteDigest(kind, block.height, round, hash), v.secret) });
+  const pc = (v, round = 0, hash = block.hash, kind = 'precommit') => ({ validator: v.pubHex, sig: schnorrSign(voteDigest(kind, block.height, round, hash, block.prevHash), v.secret) });
   const vs = node.keys.validators;
   assert.throws(() => ch.applyBlock({ ...block, commit: { round: 0, votes: vs.slice(0, 2).map((v) => pc(v)) } }), /2\/3/, 'two of four is not enough');
   assert.throws(() => ch.applyBlock({ ...block, commit: { round: 0, votes: [pc(vs[0]), pc(vs[0]), pc(vs[1])] } }), /2\/3/, 'duplicates do not add stake');
@@ -120,12 +120,12 @@ test('persistent signing log: a restarted validator never signs a conflicting vo
   await n1.init();
   const v = n1.consensus.local.values().next().value;
   const c = n1.consensus;
-  assert.ok(c.signOnce(v, 'prevote', 0, 'a'.repeat(64), voteDigest('prevote', c.h, 0, 'a'.repeat(64))));
+  assert.ok(c.signOnce(v, 'prevote', 0, 'a'.repeat(64), voteDigest('prevote', c.h, 0, 'a'.repeat(64), 'p'.repeat(64))));
   const n2 = createNode({ storage, secret: 'signlog', validators: ['aurora'] }); // "restart" on the same storage
   await n2.init();
   const c2 = n2.consensus;
-  assert.equal(c2.signOnce(v, 'prevote', 0, 'b'.repeat(64), voteDigest('prevote', c2.h, 0, 'b'.repeat(64))), null);
-  assert.ok(c2.signOnce(v, 'prevote', 0, 'a'.repeat(64), voteDigest('prevote', c2.h, 0, 'a'.repeat(64))), 're-signing the same value is fine');
+  assert.equal(c2.signOnce(v, 'prevote', 0, 'b'.repeat(64), voteDigest('prevote', c2.h, 0, 'b'.repeat(64), 'p'.repeat(64))), null);
+  assert.ok(c2.signOnce(v, 'prevote', 0, 'a'.repeat(64), voteDigest('prevote', c2.h, 0, 'a'.repeat(64), 'p'.repeat(64))), 're-signing the same value is fine');
 });
 
 test('equivocating votes seen on the network are auto-reported and slashed', async (t) => {
@@ -136,7 +136,12 @@ test('equivocating votes seen on the network are auto-reported and slashed', asy
   await until(() => node.chain.height >= 1, 15_000); // validators earn rewards to pay the evidence fee
   const bad = node.keys.validators[3];
   const h = node.chain.height + 1;
-  const vote = (hash) => ({ kind: 'prevote', height: h, round: 50, blockHash: hash, validator: bad.pubHex, sig: schnorrSign(voteDigest('prevote', h, 50, hash), bad.secret) });
+  const parent = node.chain.tip.hash;
+  const r = node.consensus.round;
+  const vote = (hash) => ({ kind: 'prevote', height: h, round: r, blockHash: hash, parent, validator: bad.pubHex, sig: schnorrSign(voteDigest('prevote', h, r, hash, parent), bad.secret) });
+  // Non-validators' votes are not even stored.
+  const stranger = Wallet.generate();
+  assert.equal(node.consensus.onVote({ ...vote('3'.repeat(64)), validator: stranger.pubHex, sig: schnorrSign(voteDigest('prevote', h, r, '3'.repeat(64), parent), stranger.secret) }).error, 'not a validator at this height');
   node.consensus.onVote(vote('1'.repeat(64)));
   node.consensus.onVote(vote('2'.repeat(64)));
   assert.equal(node.consensus.evidence.length, 1);

@@ -38,6 +38,7 @@ function summarizeTx(tx, hash, extra = {}) {
   if (tx.type === 'validator_register') Object.assign(s, { from: addressFromPub(tx.from), to: 'stake (self-bond)', amount: tx.amount, validatorName: tx.name, commissionBps: tx.commissionBps });
   if (tx.type === 'stake') Object.assign(s, { from: addressFromPub(tx.from), to: addressFromPub(tx.validator), amount: tx.amount, validator: tx.validator });
   if (tx.type === 'unstake') Object.assign(s, { from: addressFromPub(tx.validator), to: addressFromPub(tx.from), amount: tx.amount, validator: tx.validator, unbonding: true });
+  if (tx.type === 'unjail') Object.assign(s, { from: addressFromPub(tx.from), to: addressFromPub(tx.from), amount: null, validator: tx.from });
   if (tx.type === 'evidence') Object.assign(s, { from: addressFromPub(tx.from), to: addressFromPub(tx.voteA.validator), amount: null, offender: tx.voteA.validator, voteKind: tx.voteA.kind, slashing: true });
   return s;
 }
@@ -62,7 +63,7 @@ export function createRouter({ chain, consensus, facilitator, services, payee, k
     const bonded = v.selfStake + v.delegated;
     return {
       name: v.name, pub: v.pub, owner: v.owner, selfStake: v.selfStake.toString(), delegated: v.delegated.toString(), bonded: bonded.toString(),
-      commissionBps: v.commissionBps, jailed: v.jailed, slashed: v.slashed.toString(), rewards: v.rewards.toString(), joinedEpoch: v.joinedEpoch,
+      commissionBps: v.commissionBps, jailed: v.jailed, jailedUntilEpoch: v.jailedUntilEpoch, slashed: v.slashed.toString(), rewards: v.rewards.toString(), joinedEpoch: v.joinedEpoch,
       produced: v.produced, missed: v.missed, uptimePct: v.produced + v.missed ? Math.round((v.produced / (v.produced + v.missed)) * 1000) / 10 : null,
       delegators: chain.state.delegations.get(v.pub)?.size ?? 0,
     };
@@ -199,7 +200,7 @@ export function createRouter({ chain, consensus, facilitator, services, payee, k
         epoch: s.epoch, nextEpochSlot: (epochOf(chain.slot) + 1) * SLOTS_PER_EPOCH, slot: chain.slot,
         bonded: bonded.toString(), unbonding: s.unbonding.reduce((n, u) => n + u.amount, 0n).toString(), burned: s.burned.toString(),
         active: activeValidators(),
-        validators: [...s.validators.values()].map(validatorView).sort((a, b) => (BigInt(b.bonded) > BigInt(a.bonded) ? 1 : -1)),
+        validators: [...s.validators.values()].map(validatorView).sort((a, b) => { const x = BigInt(a.bonded), y = BigInt(b.bonded); return x === y ? (a.pub < b.pub ? -1 : 1) : y > x ? 1 : -1; }),
         slashes: s.slashes.slice(-20).reverse(),
         evidence: consensus.status().evidence,
       });
@@ -218,7 +219,7 @@ export function createRouter({ chain, consensus, facilitator, services, payee, k
     ['GET', /^\/p2p\/status$/, () => ok(consensus.status())],
     ['GET', /^\/p2p\/blocks$/, (req) => ok({ blocks: blocksFrom(chain, Number(req.query.from), Number(req.query.limit) || 50) })],
     ['POST', /^\/p2p\/tx$/, (req) => ok(consensus.onTx(req.body))],
-    ['POST', /^\/p2p\/hello$/, (req) => ok({ added: typeof req.body?.url === 'string' && consensus.addPeer(req.body.url) })],
+    ['POST', /^\/p2p\/hello$/, (req) => ok(consensus.onHello(req.body))],
     ['POST', /^\/p2p\/proposal$/, (req) => ok(consensus.onProposal(req.body))],
     ['POST', /^\/p2p\/vote$/, (req) => ok(consensus.onVote(req.body))],
     ['POST', /^\/p2p\/commit$/, (req) => ok(consensus.onCommit(req.body))],

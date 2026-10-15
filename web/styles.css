@@ -137,3 +137,12 @@ pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-family: var
 .kv { display: grid; grid-template-columns: 160px 1fr; gap: 6px 14px; font-size: 0.88rem; }
 .kv > div:nth-child(odd) { color: var(--muted); }
 @media (max-width: 680px) { .kv { grid-template-columns: 1fr; } }
+.tag.validator_register, .tag.ok-tag { color: var(--green); border-color: rgba(52, 211, 153, 0.4); }
+.tag.stake { color: var(--cyan); border-color: rgba(34, 211, 238, 0.4); }
+.tag.unstake, .tag.unjail { color: #fb923c; border-color: rgba(251, 146, 60, 0.4); }
+.tag.evidence { color: var(--red); border-color: rgba(248, 113, 113, 0.45); }
+
+.poh-head { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.poh-head .label { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; }
+.poh-head .value { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.nowrap { white-space: nowrap; }

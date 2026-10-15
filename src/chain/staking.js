@@ -6,20 +6,22 @@ import { utf8 } from '../crypto/encoding.js';
 import { addressFromPub, parsePub } from './keys.js';
 import {
   CHAIN_ID, MIN_VALIDATOR_STAKE, MIN_DELEGATION, MAX_VALIDATORS, MAX_COMMISSION_BPS, UNBONDING_EPOCHS, SLASH_BPS, REPORTER_REWARD_BPS, parseUnits,
+  MAX_DELEGATORS_PER_VALIDATOR, JAIL_EPOCHS,
 } from './params.js';
 
 export const VOTE_KINDS = ['prevote', 'precommit'];
 const HEX64 = /^[0-9a-f]{64}$/;
 const NAME_RE = /^[a-z0-9][a-z0-9-]{1,31}$/;
 
-// What a validator signs for a consensus vote.
-export const voteDigest = (kind, height, round, blockHash) => taggedHash('Voxian/vote', utf8(CHAIN_ID), utf8(`${kind}:${height}:${round}:${blockHash}`));
+// What a validator signs for a consensus vote. Binding the parent block hash ties a vote to one chain
+// history, so votes from another chain instance (e.g. a wiped devnet) can't be replayed as evidence.
+export const voteDigest = (kind, height, round, blockHash, parent) => taggedHash('Voxian/vote', utf8(CHAIN_ID), utf8(`${kind}:${height}:${round}:${blockHash}:${parent}`));
 
 export function checkVote(v) {
   if (!v || typeof v !== 'object') return false;
   if (!VOTE_KINDS.includes(v.kind) || !Number.isSafeInteger(v.height) || v.height < 1 || !Number.isSafeInteger(v.round) || v.round < 0) return false;
-  if (typeof v.blockHash !== 'string' || !HEX64.test(v.blockHash)) return false;
-  try { return schnorrVerify(v.sig, voteDigest(v.kind, v.height, v.round, v.blockHash), parsePub(v.validator)); } catch { return false; }
+  if (typeof v.blockHash !== 'string' || !HEX64.test(v.blockHash) || typeof v.parent !== 'string' || !HEX64.test(v.parent)) return false;
+  try { return schnorrVerify(v.sig, voteDigest(v.kind, v.height, v.round, v.blockHash, v.parent), parsePub(v.validator)); } catch { return false; }
 }
 
 const fail = (msg) => { throw new Error(msg); };
@@ -98,6 +100,8 @@ export function applyStakingTx(state, tx, fee, ctx) {
       if (v.jailed) fail('validator is jailed');
       const amount = parseUnits(tx.amount);
       if (amount < MIN_DELEGATION) fail('below minimum delegation');
+      const existing = state.delegations.get(tx.validator);
+      if (tx.validator !== tx.from && !existing?.has(from) && (existing?.size ?? 0) >= MAX_DELEGATORS_PER_VALIDATOR) fail('validator has the maximum number of delegators');
       if (acct.balance < amount + fee) fail('insufficient balance');
       state.accounts.set(from, { balance: acct.balance - amount - fee, nonce: acct.nonce + 1 });
       if (tx.validator === tx.from) v.selfStake += amount;
@@ -126,11 +130,25 @@ export function applyStakingTx(state, tx, fee, ctx) {
       return; // still counted in state.staked until released
     }
 
+    case 'unjail': {
+      const v = state.validators.get(tx.from);
+      if (!v) fail('not a validator');
+      if (!v.jailed) fail('validator is not jailed');
+      if (state.epoch < v.jailedUntilEpoch) fail(`jailed until epoch ${v.jailedUntilEpoch}`);
+      if (v.selfStake < MIN_VALIDATOR_STAKE) fail('self-stake below validator minimum: stake more first');
+      if (acct.balance < fee) fail('insufficient balance for fee');
+      state.accounts.set(from, { balance: acct.balance - fee, nonce: acct.nonce + 1 });
+      v.jailed = false;
+      return;
+    }
+
     case 'evidence': {
       const { voteA: a, voteB: b } = tx;
       if (!checkVote(a) || !checkVote(b)) fail('evidence votes must be validly signed');
-      if (a.validator !== b.validator || a.kind !== b.kind || a.height !== b.height || a.round !== b.round) fail('votes are not for the same slot');
+      if (a.validator !== b.validator || a.kind !== b.kind || a.height !== b.height || a.round !== b.round || a.parent !== b.parent) fail('votes are not for the same slot');
       if (a.blockHash === b.blockHash) fail('votes do not conflict');
+      if (a.height > ctx.height) fail('evidence for a future height');
+      if (!ctx.parentHashAt || ctx.parentHashAt(a.height) !== a.parent) fail('evidence votes are not from this chain');
       const key = `${a.validator}:${a.kind}:${a.height}:${a.round}`;
       if (state.evidence.has(key)) fail('evidence already processed');
       const v = state.validators.get(a.validator);
@@ -143,11 +161,16 @@ export function applyStakingTx(state, tx, fee, ctx) {
       v.selfStake -= slashed;
       const dels = state.delegations.get(v.pub);
       if (dels) for (const [addr, d] of dels) { const c = cut(d); dels.set(addr, d - c); slashed += c; v.delegated -= c; }
+      // Stake that started unbonding at or after the offence is still on the hook (no slashing escape).
+      for (const u of state.unbonding) if (u.validator === v.pub && u.height >= a.height) { const c = cut(u.amount); u.amount -= c; slashed += c; }
+      state.unbonding = state.unbonding.filter((u) => u.amount > 0n);
       state.staked -= slashed;
-      const reward = (slashed * BigInt(REPORTER_REWARD_BPS)) / 10_000n;
+      // The reporter earns a share, unless the offender reports itself (that share is burned too).
+      const reward = from === v.owner ? 0n : (slashed * BigInt(REPORTER_REWARD_BPS)) / 10_000n;
       state.credit(from, reward);
       state.burned += slashed - reward;
       v.jailed = true;
+      v.jailedUntilEpoch = state.epoch + JAIL_EPOCHS;
       v.slashed += slashed;
       state.evidence.add(key);
       state.slashes.push({ validator: v.pub, name: v.name, kind: a.kind, height: a.height, round: a.round, amount: slashed.toString(), burned: (slashed - reward).toString(), reporter: from, atHeight: ctx.height });
@@ -157,7 +180,7 @@ export function applyStakingTx(state, tx, fee, ctx) {
 }
 
 export function newValidator(pub, name, commissionBps, selfStake, epoch) {
-  return { pub, name, owner: addressFromPub(pub), commissionBps, selfStake, delegated: 0n, jailed: false, slashed: 0n, rewards: 0n, joinedEpoch: epoch, produced: 0, missed: 0 };
+  return { pub, name, owner: addressFromPub(pub), commissionBps, selfStake, delegated: 0n, jailed: false, jailedUntilEpoch: 0, slashed: 0n, rewards: 0n, joinedEpoch: epoch, produced: 0, missed: 0 };
 }
 
-export const STAKING_TYPES = new Set(['validator_register', 'stake', 'unstake', 'evidence']);
+export const STAKING_TYPES = new Set(['validator_register', 'stake', 'unstake', 'evidence', 'unjail']);

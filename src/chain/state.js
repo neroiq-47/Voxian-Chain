@@ -95,6 +95,7 @@ const TYPE_KEYS = {
   stake: ['type', 'from', 'validator', 'amount', 'fee', 'nonce', 'sig'],
   unstake: ['type', 'from', 'validator', 'amount', 'fee', 'nonce', 'sig'],
   evidence: ['type', 'from', 'voteA', 'voteB', 'fee', 'nonce', 'sig'],
+  unjail: ['type', 'from', 'fee', 'nonce', 'sig'],
 };
 
 /**
@@ -256,6 +257,8 @@ export function txAddresses(tx) {
     if (tx.type === 'shielded' && tx.publicOut) out.add(tx.publicOut.to);
     if (tx.type === 'auth_transfer') { out.add(addressFromPub(tx.relayer)); out.add(addressFromPub(tx.auth.from)); out.add(tx.auth.to); }
     if (STAKING_TYPES.has(tx.type)) out.add(addressFromPub(tx.from));
+    if (tx.type === 'stake' || tx.type === 'unstake') out.add(addressFromPub(tx.validator)); // the validator sees its delegations
+    if (tx.type === 'evidence') out.add(addressFromPub(tx.voteA.validator)); // the offender sees evidence against it
   } catch { /* malformed txs never reach the chain */ }
   return [...out];
 }

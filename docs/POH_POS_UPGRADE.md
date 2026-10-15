@@ -25,7 +25,7 @@
 ## Phase 2: Slots, epochs and a PoH-driven leader schedule
 *Time is measured in PoH ticks, not wall clocks.*
 - `TICKS_PER_SLOT` ticks make a slot; `SLOTS_PER_EPOCH` slots make an epoch.
-- Each block has a `slot` greater than its parent's. Its PoH must prove that the skipped slots really elapsed: `(slot − parentSlot − 1) × TICKS_PER_SLOT ≤ ticks < (slot − parentSlot) × TICKS_PER_SLOT`, with the lower bound capped by `MAX_PROVEN_SKIP_TICKS`.
+- Each block has a `slot` greater than its parent's and may skip at most `MAX_SLOT_GAP` (120) slots. Its PoH must prove that every skipped slot really elapsed: `ticks ≥ (slot − parentSlot − 1) × TICKS_PER_SLOT`, with no cap. During a longer stall, the round-to-slot mapping wraps so blocks always stay provable.
 - The leader schedule is fixed per epoch. It is stake-weighted, uses a snapshot of the validator set taken at the epoch boundary, and is seeded by the anchor block's hash. Leaders hold `LEADER_SLOTS` consecutive slots.
 - This replaces the old wall-clock round timer: a leader can only claim a later slot by doing the sequential hashing.
 - **Done when:** blocks from the wrong leader for a slot, or with too few ticks for the slots they skip, are rejected, and the schedule is identical on every node.
@@ -55,9 +55,26 @@
 ## Phase 5: Slashing and accountability
 - Equivocation (two conflicting signed votes for the same kind, height and round) is detected automatically and submitted as an `evidence` transaction.
   - `SLASH_BPS` of the offender's bonded stake (self and delegated, pro rata) is taken: 10% goes to the reporter and the rest is **burned**.
-  - The offender is **jailed** and leaves the next epoch's schedule. Each piece of evidence counts only once.
+  - Stake that started unbonding at or after the offence is slashed too.
+  - The offender is **jailed** for `JAIL_EPOCHS` (2), then may `unjail`. Each piece of evidence counts only once.
+  - Votes name their parent block, so votes from another chain instance can't be replayed as evidence.
 - Uptime accounting: each validator's produced and missed leader slots, shown in the explorer.
 - **Done when:** a forged double-vote is slashed exactly once, burned VOX shows in the supply, and a jailed validator receives no slots.
+
+## Audit outcome (fixed before shipping)
+Two independent reviews (consensus, and staking economics) ran against the finished code. Every confirmed finding was fixed and has a regression test (`test/audit.test.js`):
+
+| Finding | Severity | Fix |
+|---|---|---|
+| Two blocks at one height could each reach 2/3 of a *different* epoch's validator set | Critical | All votes at a height are weighted by a single snapshot (`weightSnapshot`) |
+| A leader could claim far-future slots cheaply (capped PoH) and drag peers' rounds forward | High | Full PoH for every skipped slot, at most 120 skipped; rounds advance only by local clock or > 1/3 of stake (f+1 rule); proposals more than one round ahead are rejected |
+| CPU amplification: many signed junk proposals, and certificate-less commits verified in full | High | One proposal per round is validated; the commit certificate is checked before PoH and proofs; PoH hashing is about 7.6× faster (SHA-256 midstate) |
+| Unstaking right before evidence escaped the slash | High | Unbonding stake from the offence height onward is slashed |
+| Jailing everyone halted the chain permanently; old votes from a wiped devnet could serve as evidence | High | Timed jail plus `unjail`; the active set never goes empty; votes are bound to the parent hash |
+| Leader-schedule seed could be ground through the anchor block's hash | Medium | Seeds chain epoch to epoch and only mix in height and slot |
+| Signing log and lock not durable across a crash or restart | Medium | fsync'd writes; the lock and valid-block state are persisted |
+| Votes from non-validators stored without limit; unauthenticated peer announcements | Medium | Votes are only accepted from the height's validator set; hellos must be signed by an active validator; failing dynamic peers are evicted; sync falls back to the next peer |
+| Delegation spam slowed every block; self-reporting cut the penalty; released stake wasn't spendable until the next block; misleading uptime | Low | Max 1,000 delegators per validator and a 10 VOX minimum; self-reports earn no reward; pending state enters the epoch; missed slots are only counted once a heartbeat was due |
 
 ## Delivery
 All five phases ship together on the devnet branch. Validation:

@@ -4,16 +4,14 @@
 //   { t: k, h }  – k ticks (k * HASHES_PER_TICK hashes) ending at hash h
 //   { m: x, h }  – mix-in of tx hash x:  h = H("Voxian/poh-mix", prev, x)
 import { hexToBytes, bytesToHex, utf8 } from '../crypto/encoding.js';
-import { taggedHash, sha256Hex } from '../crypto/sha256.js';
+import { taggedHash, taggedHasher32, sha256Hex } from '../crypto/sha256.js';
 import { HASHES_PER_TICK } from './params.js';
 
 const HEX64 = /^[0-9a-f]{64}$/;
 export const pohSeed = (genesisHash) => sha256Hex(`Voxian/poh-genesis:${genesisHash}`);
 
-function hashTicks(h, ticks) {
-  for (let i = 0; i < ticks * HASHES_PER_TICK; i++) h = taggedHash('Voxian/poh', h);
-  return h;
-}
+const pohStep = taggedHasher32('Voxian/poh'); // == taggedHash('Voxian/poh', h), one compression per hash
+const hashTicks = (h, ticks) => (ticks > 0 ? pohStep(h, ticks * HASHES_PER_TICK) : h);
 const mix = (h, x) => taggedHash('Voxian/poh-mix', h, utf8(x));
 
 export class PohRecorder {

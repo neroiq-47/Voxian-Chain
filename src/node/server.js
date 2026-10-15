@@ -30,18 +30,25 @@ export class FileStorage {
     fs.mkdirSync(this.dir, { recursive: true });
     fs.writeFileSync(this.file, blocks.map((b) => JSON.stringify(b) + '\n').join(''));
   }
-  async clear() { if (this.file) { fs.rmSync(this.file, { force: true }); fs.rmSync(this.metaFile(), { force: true }); } }
+  async clear() { if (this.file) { fs.rmSync(this.file, { force: true }); fs.rmSync(this.metaFile(), { force: true }); this.meta = null; } }
   // Small synchronous key/value metadata (the validator signing log must hit disk before votes go out).
   metaFile() { return this.file.replace(/\.jsonl$/, '.meta.json'); }
-  readMeta() { try { return JSON.parse(fs.readFileSync(this.metaFile(), 'utf8')); } catch { return {}; } }
+  readMeta() {
+    if (!this.meta) { try { this.meta = JSON.parse(fs.readFileSync(this.metaFile(), 'utf8')); } catch { this.meta = {}; } }
+    return this.meta;
+  }
   loadMeta(key) { return this.readMeta()[key] ?? null; }
+  // Durable write (temp file + fsync + rename + directory fsync): the signing log must survive a crash,
+  // or a restarted validator could sign a conflicting vote and be slashed.
   saveMeta(key, value) {
     fs.mkdirSync(this.dir, { recursive: true });
     const all = this.readMeta();
     all[key] = value;
     const tmp = this.metaFile() + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify(all));
+    const fd = fs.openSync(tmp, 'w');
+    try { fs.writeSync(fd, JSON.stringify(all)); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
     fs.renameSync(tmp, this.metaFile());
+    try { const dfd = fs.openSync(this.dir, 'r'); fs.fsyncSync(dfd); fs.closeSync(dfd); } catch { /* not supported on every platform */ }
   }
 }
 

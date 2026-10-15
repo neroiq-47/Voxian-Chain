@@ -21,6 +21,7 @@ export const MIN_FEE = {
   stake: 10_000n,
   unstake: 10_000n,
   evidence: 10_000n,
+  unjail: 10_000n,
 };
 
 export const BLOCK_INTERVAL_MS = 2_000; // produce a block this often while txs are waiting
@@ -40,12 +41,17 @@ export const LEADER_SLOTS = 2; // consecutive slots per scheduled leader
 // An idle chain still produces a heartbeat block this many slots after the last one; a leader is only
 // charged with a missed slot for skipped slots at or beyond this point (earlier slots had nothing due).
 export const HEARTBEAT_SLOTS = Math.ceil(EMPTY_BLOCK_MS / (TICK_MS * TICKS_PER_SLOT));
-export const MAX_PROVEN_SKIP_TICKS = 600; // cap on PoH a block must carry to prove skipped slots
-export const MAX_BLOCK_TICKS = 1_200; // verification bound per block (~2 s of hashing in a browser)
+export const MAX_BLOCK_TICKS = 1_200; // verification bound per block (~0.3 s of hashing)
+// A block may skip at most this many slots, and must carry PoH for every skipped slot (no cap), so a
+// leader can't jump ahead cheaply. During a longer stall, round -> slot mapping wraps (see consensus).
+export const MAX_SLOT_GAP = MAX_BLOCK_TICKS / TICKS_PER_SLOT;
+export const ROUND_LOOKAHEAD = 10; // votes/proposals more than this many rounds ahead are not stored
 
 // ---- Proof of Stake (phase 4-5) ----
 export const MIN_VALIDATOR_STAKE = 10_000n * UNIT;
-export const MIN_DELEGATION = 1n * UNIT;
+export const MIN_DELEGATION = 10n * UNIT;
+export const MAX_DELEGATORS_PER_VALIDATOR = 1_000; // bounds per-block reward distribution work
+export const JAIL_EPOCHS = 2; // after this many epochs a jailed validator may send `unjail`
 export const MAX_VALIDATORS = 16;
 export const MAX_COMMISSION_BPS = 5_000;
 export const UNBONDING_EPOCHS = 2;

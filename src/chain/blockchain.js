@@ -8,9 +8,11 @@ import { addressFromPub, parsePub, accountKeyFromSeed, devnetSeed, DEFAULT_DEVNE
 import { txHash, merkleRoot } from './tx.js';
 import { PohRecorder, verifyPoh, pohSeed } from './poh.js';
 import { activeSet, enterEpoch, distributeReward, newValidator, voteDigest } from './staking.js';
+
+export { voteDigest };
 import {
   CHAIN_ID, UNIT, MAX_SUPPLY, GENESIS_TIMESTAMP, MAX_BLOCK_TXS, MAX_MEMPOOL, MAX_PENDING_PER_SENDER, MAX_CLOCK_DRIFT_MS, blockReward,
-  TICKS_PER_SLOT, SLOTS_PER_EPOCH, LEADER_SLOTS, MAX_PROVEN_SKIP_TICKS, MAX_BLOCK_TICKS, HEARTBEAT_SLOTS,
+  TICKS_PER_SLOT, SLOTS_PER_EPOCH, LEADER_SLOTS, MAX_BLOCK_TICKS, MAX_SLOT_GAP, HEARTBEAT_SLOTS,
 } from './params.js';
 
 export const VALIDATOR_NAMES = ['vox-validator-aurora', 'vox-validator-borealis', 'vox-validator-cygnus', 'vox-validator-draco'];
@@ -94,6 +96,7 @@ export class Blockchain {
     this.now = now;
     this.blockListeners = new Set();
     this.txListeners = new Set();
+    this.parentHashAt = (h) => this.blocks[h - 1]?.hash; // for evidence: votes at height h name block h-1
     this.reset();
   }
 
@@ -130,9 +133,16 @@ export class Blockchain {
   onTx(fn) { this.txListeners.add(fn); return () => this.txListeners.delete(fn); }
 
   // ---- epochs & leader schedule (phase 2) ----
+  // The schedule seed chains epoch to epoch and only mixes in the anchor's height and slot, which the
+  // anchor's proposer can't grind (unlike its hash: timestamp, tx choice, PoH ticks). Its only influence is
+  // whether/in which of its slots to produce. If every validator were jailed, the previous set carries on.
   makeSnapshot(epoch) {
-    const validators = activeSet(this.state);
-    return { epoch, anchor: this.blocks.at(-1).hash, validators, total: validators.reduce((n, v) => n + v.stake, 0n), power: new Map(validators.map((v) => [v.pub, v.stake])) };
+    const tip = this.blocks.at(-1);
+    const prev = epoch === 0 ? null : this.snapshots.get(epochOf(tip.slot));
+    let validators = activeSet(this.state);
+    if (validators.length === 0 && prev) validators = prev.validators;
+    const seed = prev ? sha256Hex(`Voxian/schedule:${prev.seed}:${tip.height}:${tip.slot}:${epoch}`) : this.genesis.hash;
+    return { epoch, anchor: tip.hash, seed, validators, total: validators.reduce((n, v) => n + v.stake, 0n), power: new Map(validators.map((v) => [v.pub, v.stake])) };
   }
 
   // The validator set for `epoch` is fixed by the last block before the epoch starts.
@@ -150,19 +160,28 @@ export class Blockchain {
   leaderFor(slot) {
     const snap = this.snapshotFor(epochOf(slot));
     if (snap.total === 0n) throw new Error('no active validators');
-    let r = bytesToBig(sha256(utf8(`${snap.anchor}:${Math.floor(slot / LEADER_SLOTS)}`))) % snap.total;
+    let r = bytesToBig(sha256(utf8(`${snap.seed}:${Math.floor(slot / LEADER_SLOTS)}`))) % snap.total;
     for (const v of snap.validators) { if (r < v.stake) return v; r -= v.stake; }
     return snap.validators[0];
   }
 
   hasQuorum(power, total) { return total > 0n && power * 3n > total * 2n; }
 
-  // Stake behind valid, distinct precommits for this block (weighted by its epoch's snapshot).
+  // Voting weights for height h come from ONE snapshot: the epoch of the first slot after block h-1.
+  // (Weighting candidate blocks by their own slots' epochs would let two blocks at one height each reach
+  // 2/3 of a different validator set: a fork.)
+  weightSnapshot(height) {
+    const parent = this.blocks[height - 1];
+    if (!parent) throw new Error('unknown parent height');
+    return this.snapshotFor(epochOf(parent.slot + 1));
+  }
+
+  // Stake behind valid, distinct precommits for this block.
   commitPower(block, { checkSigs = true } = {}) {
     const cert = block.commit;
-    const snap = this.snapshotFor(epochOf(block.slot));
+    const snap = this.weightSnapshot(block.height);
     if (!cert || !Number.isSafeInteger(cert.round) || cert.round < 0 || !Array.isArray(cert.votes)) return { power: 0n, total: snap.total };
-    const digest = voteDigest('precommit', block.height, cert.round, block.hash);
+    const digest = voteDigest('precommit', block.height, cert.round, block.hash, block.prevHash);
     const seen = new Set();
     let power = 0n;
     for (const v of cert.votes) {
@@ -184,7 +203,7 @@ export class Blockchain {
     const sender = senderOf(tx);
     if (this.mempool.filter((m) => m.sender === sender).length >= MAX_PENDING_PER_SENDER) throw new Error('too many pending transactions from this sender');
     try {
-      applyTx(this.pending, tx, { height: this.height + 1, timestamp: this.now(), skipCrypto: this.verified.has(hash), admission: true });
+      applyTx(this.pending, tx, { height: this.height + 1, timestamp: this.now(), skipCrypto: this.verified.has(hash), admission: true, parentHashAt: this.parentHashAt });
     } catch (e) {
       if (e.crypto) this.rejected.add(hash);
       throw e;
@@ -197,9 +216,10 @@ export class Blockchain {
 
   rebuildPending() {
     this.pending = this.state.clone();
+    enterEpoch(this.pending, epochOf(this.tip.slot + 1)); // stake released at the boundary is spendable now
     const keep = [];
     for (const m of this.mempool) {
-      try { applyTx(this.pending, m.tx, { height: this.height + 1, timestamp: this.now(), skipCrypto: true }); keep.push(m); }
+      try { applyTx(this.pending, m.tx, { height: this.height + 1, timestamp: this.now(), skipCrypto: true, parentHashAt: this.parentHashAt }); keep.push(m); }
       catch { this.verified.delete(m.hash); }
     }
     this.mempool = keep;
@@ -215,7 +235,7 @@ export class Blockchain {
     for (const tx of txs) {
       const hash = txHash(tx);
       try {
-        const r = applyTx(s, tx, { height: header.height, timestamp: header.timestamp, skipCrypto: trusted || this.verified.has(hash) });
+        const r = applyTx(s, tx, { height: header.height, timestamp: header.timestamp, skipCrypto: trusted || this.verified.has(hash), parentHashAt: this.parentHashAt });
         fees += r.fee;
         included.push({ hash, tx });
       } catch (e) {
@@ -278,9 +298,9 @@ export class Blockchain {
     // Proof of History: the segment must continue from the parent, prove the skipped slots elapsed,
     // and contain exactly this block's txs, in order.
     const gap = block.slot - prev.slot;
-    const minTicks = Math.min((gap - 1) * TICKS_PER_SLOT, MAX_PROVEN_SKIP_TICKS);
-    const maxTicks = Math.min(gap * TICKS_PER_SLOT - 1, MAX_BLOCK_TICKS);
-    if (!Number.isSafeInteger(block.pohTicks) || block.pohTicks < minTicks || block.pohTicks > maxTicks) throw new Error(`PoH must prove ${minTicks}-${maxTicks} ticks for this slot`);
+    if (gap > MAX_SLOT_GAP) throw new Error(`slot skips more than ${MAX_SLOT_GAP} slots`);
+    const minTicks = (gap - 1) * TICKS_PER_SLOT;
+    if (!Number.isSafeInteger(block.pohTicks) || block.pohTicks < minTicks || block.pohTicks > MAX_BLOCK_TICKS) throw new Error(`PoH must prove ${minTicks}-${MAX_BLOCK_TICKS} ticks for this slot`);
     if (!trusted) {
       if (!schnorrVerify(block.signature, hexToBytes(block.hash), parsePub(block.proposer))) throw new Error('bad block signature');
       const poh = verifyPoh(prev.pohEnd, block.poh?.entries, { maxTicks: MAX_BLOCK_TICKS, maxEntries: MAX_BLOCK_TXS + 64 });
@@ -296,11 +316,14 @@ export class Blockchain {
 
   // Commit a block. Untrusted blocks must carry a precommit certificate from > 2/3 of the epoch's stake.
   applyBlock(block, { trusted = false, persist = true } = {}) {
-    const { state, hashes } = this.validateBlock(block, { trusted });
     if (!trusted) {
+      // Cheap checks and the certificate first: never spend PoH/proof verification on an uncertified block.
+      if (!block || block.height !== this.height + 1 || block.prevHash !== this.tip.hash) throw new Error('block does not extend the tip');
+      if (block.hash !== blockHash(block)) throw new Error('bad block hash');
       const { power, total } = this.commitPower(block);
       if (!this.hasQuorum(power, total)) throw new Error('missing 2/3 commit certificate');
     }
+    const { state, hashes } = this.validateBlock(block, { trusted });
     const epoch = epochOf(block.slot);
     if (!this.snapshots.has(epoch)) this.snapshots.set(epoch, this.snapshotFor(epoch)); // freeze at the boundary
     for (const e of this.snapshots.keys()) if (e < epoch - 2) this.snapshots.delete(e);
@@ -335,10 +358,11 @@ export class Blockchain {
       const leader = this.leaderFor(prev.slot + gap);
       const local = localValidators.find((v) => v.pubHex === leader.pub);
       if (!local) continue;
+      if (gap > MAX_SLOT_GAP) return null;
       const rec = new PohRecorder(prev.pohEnd);
-      if (gap > 1) rec.tick(Math.min((gap - 1) * TICKS_PER_SLOT, MAX_PROVEN_SKIP_TICKS));
+      if (gap > 1) rec.tick((gap - 1) * TICKS_PER_SLOT);
       const block = this.buildBlock(prev.slot + gap, local, rec);
-      const digest = voteDigest('precommit', block.height, 0, block.hash);
+      const digest = voteDigest('precommit', block.height, 0, block.hash, block.prevHash);
       block.commit = { round: 0, votes: localValidators.map((v) => ({ validator: v.pubHex, sig: schnorrSign(digest, v.secret) })) };
       return this.applyBlock(block);
     }
