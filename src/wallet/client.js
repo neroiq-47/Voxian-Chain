@@ -29,4 +29,7 @@ export class ChainClient {
   services() { return this.request('api/services'); }
   revenue() { return this.request('api/services/revenue'); }
   consensus() { return this.request('api/consensus'); }
+  poh() { return this.request('api/poh'); }
+  staking() { return this.request('api/staking'); }
+  stakingOf(address) { return this.request(`api/staking/${encodeURIComponent(address)}`); }
 }

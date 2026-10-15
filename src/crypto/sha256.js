@@ -57,6 +57,51 @@ export function sha256(input) {
 
 export const sha256Hex = (input) => bytesToHex(sha256(input));
 
+// Fast path for hash chains: tagged hash of exactly 32 bytes. The tag prefix (sha256(tag) twice) is one
+// full 64-byte block, so its compression is precomputed once; each call then needs a single compression.
+const W2 = new Uint32Array(64);
+function compress(state, words) {
+  for (let i = 16; i < 64; i++) {
+    const w15 = words[i - 15], w2 = words[i - 2];
+    const s0 = ((w15 >>> 7) | (w15 << 25)) ^ ((w15 >>> 18) | (w15 << 14)) ^ (w15 >>> 3);
+    const s1 = ((w2 >>> 17) | (w2 << 15)) ^ ((w2 >>> 19) | (w2 << 13)) ^ (w2 >>> 10);
+    words[i] = (words[i - 16] + s0 + words[i - 7] + s1) | 0;
+  }
+  let [a, b, c, d, e, f, g, h] = state;
+  for (let i = 0; i < 64; i++) {
+    const S1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
+    const t1 = (h + S1 + ((e & f) ^ (~e & g)) + K[i] + words[i]) | 0;
+    const S0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
+    const t2 = (S0 + ((a & b) ^ (a & c) ^ (b & c))) | 0;
+    h = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
+  }
+  return [(state[0] + a) | 0, (state[1] + b) | 0, (state[2] + c) | 0, (state[3] + d) | 0, (state[4] + e) | 0, (state[5] + f) | 0, (state[6] + g) | 0, (state[7] + h) | 0];
+}
+
+export function taggedHasher32(tag) {
+  const t = sha256(tag);
+  const block = new DataView(concatBytes(t, t).buffer);
+  for (let i = 0; i < 16; i++) W2[i] = block.getUint32(i * 4);
+  const mid = compress([0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19], W2);
+  // Iterate n times starting from a 32-byte value (as 8 big-endian words); returns 32 bytes.
+  return function iterate(bytes32, n = 1) {
+    const v = new DataView(bytes32.buffer, bytes32.byteOffset, 32);
+    let st = [];
+    for (let i = 0; i < 8; i++) st.push(v.getUint32(i * 4));
+    for (let k = 0; k < n; k++) {
+      for (let i = 0; i < 8; i++) W2[i] = st[i];
+      W2[8] = 0x80000000;
+      for (let i = 9; i < 15; i++) W2[i] = 0;
+      W2[15] = (64 + 32) * 8; // message bit length: 64-byte tag prefix + 32-byte input
+      st = compress(mid, W2);
+    }
+    const out = new Uint8Array(32);
+    const ov = new DataView(out.buffer);
+    for (let i = 0; i < 8; i++) ov.setUint32(i * 4, st[i] >>> 0);
+    return out;
+  };
+}
+
 // BIP340-style tagged hash: domain-separates every use of SHA-256 in the protocol.
 const tagCache = new Map();
 export function taggedHash(tag, ...parts) {

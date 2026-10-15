@@ -1,7 +1,12 @@
 // Transport-agnostic HTTP router. The Node server and the in-browser node both call handle().
 import { isAddress } from '../chain/keys.js';
 import { signTx, txHash } from '../chain/tx.js';
-import { formatVox, parseVox, CHAIN_ID, NETWORK, TICKER, DECIMALS, MAX_SUPPLY, MIN_FEE, BLOCK_INTERVAL_MS, INITIAL_REWARD, HALVING_INTERVAL } from '../chain/params.js';
+import {
+  formatVox, parseVox, CHAIN_ID, NETWORK, TICKER, DECIMALS, MAX_SUPPLY, MIN_FEE, BLOCK_INTERVAL_MS, INITIAL_REWARD, HALVING_INTERVAL,
+  TICK_MS, HASHES_PER_TICK, TICKS_PER_SLOT, SLOTS_PER_EPOCH, LEADER_SLOTS, MIN_VALIDATOR_STAKE, MIN_DELEGATION, MAX_VALIDATORS, MAX_COMMISSION_BPS,
+  UNBONDING_EPOCHS, SLASH_BPS, REPORTER_REWARD_BPS,
+} from '../chain/params.js';
+import { epochOf } from '../chain/blockchain.js';
 import { addressFromPub } from '../chain/keys.js';
 import { txAddresses } from '../chain/state.js';
 import { H } from '../crypto/secp256k1.js';
@@ -30,10 +35,16 @@ function summarizeTx(tx, hash, extra = {}) {
   if (tx.type === 'shield') Object.assign(s, { from: addressFromPub(tx.from), to: 'shielded pool', amount: tx.amount });
   if (tx.type === 'shielded') Object.assign(s, { from: 'shielded', to: tx.publicOut ? tx.publicOut.to : 'shielded', amount: tx.publicOut ? tx.publicOut.amount : null, private: true, ref: tx.ref, notesIn: tx.inputs.length, notesOut: tx.outputs.length });
   if (tx.type === 'auth_transfer') Object.assign(s, { from: addressFromPub(tx.auth.from), to: tx.auth.to, amount: tx.auth.value, resource: tx.auth.resource, x402: true });
+  if (tx.type === 'validator_register') Object.assign(s, { from: addressFromPub(tx.from), to: 'stake (self-bond)', amount: tx.amount, validatorName: tx.name, commissionBps: tx.commissionBps });
+  if (tx.type === 'stake') Object.assign(s, { from: addressFromPub(tx.from), to: addressFromPub(tx.validator), amount: tx.amount, validator: tx.validator });
+  if (tx.type === 'unstake') Object.assign(s, { from: addressFromPub(tx.validator), to: addressFromPub(tx.from), amount: tx.amount, validator: tx.validator, unbonding: true });
+  if (tx.type === 'unjail') Object.assign(s, { from: addressFromPub(tx.from), to: addressFromPub(tx.from), amount: null, validator: tx.from });
+  if (tx.type === 'evidence') Object.assign(s, { from: addressFromPub(tx.from), to: addressFromPub(tx.voteA.validator), amount: null, offender: tx.voteA.validator, voteKind: tx.voteA.kind, slashing: true });
   return s;
 }
 
-const blockSummary = (b) => ({ height: b.height, hash: b.hash, timestamp: b.timestamp, proposer: b.proposer, txCount: b.txs.length, reward: b.reward, fees: b.fees });
+const blockSummary = (b) => ({ height: b.height, slot: b.slot, hash: b.hash, timestamp: b.timestamp, proposer: b.proposer, txCount: b.txs.length, reward: b.reward, fees: b.fees, pohTicks: b.pohTicks, round: b.commit?.round ?? 0, signers: b.commit?.votes.length ?? 0 });
+const bpsPct = (x, total) => (total > 0n ? Number((x * 10000n) / total) / 100 : 0);
 
 export function createRouter({ chain, consensus, facilitator, services, payee, keys }) {
   const faucetLast = new Map();
@@ -42,8 +53,21 @@ export function createRouter({ chain, consensus, facilitator, services, payee, k
   // could make the facilitator relay, and pay gas for, arbitrary self-payments).
   const knownRequirements = new Set(services.flatMap((s) => paymentRequirements(s, payee).map((r) => canonicalJSON(r))));
   const isKnownRequirement = (r) => { try { return knownRequirements.has(canonicalJSON(r)); } catch { return false; } };
-  const validators = chain.genesis.validators;
-  const validatorName = new Map(validators.map((v) => [v.pub, v.name]));
+  const nameOf = (pub) => chain.state.validators.get(pub)?.name ?? (pub ? pub.slice(0, 10) + '…' : 'genesis');
+  // Active set for the next slot's epoch (what the leader schedule and vote weights use).
+  const activeValidators = () => {
+    const snap = chain.snapshotFor(epochOf(chain.slot + 1));
+    return snap.validators.map((v) => ({ name: v.name, pub: v.pub, address: v.address, stake: v.stake.toString(), weightPct: bpsPct(v.stake, snap.total) }));
+  };
+  const validatorView = (v) => {
+    const bonded = v.selfStake + v.delegated;
+    return {
+      name: v.name, pub: v.pub, owner: v.owner, selfStake: v.selfStake.toString(), delegated: v.delegated.toString(), bonded: bonded.toString(),
+      commissionBps: v.commissionBps, jailed: v.jailed, jailedUntilEpoch: v.jailedUntilEpoch, slashed: v.slashed.toString(), rewards: v.rewards.toString(), joinedEpoch: v.joinedEpoch,
+      produced: v.produced, missed: v.missed, uptimePct: v.produced + v.missed ? Math.round((v.produced / (v.produced + v.missed)) * 1000) / 10 : null,
+      delegators: chain.state.delegations.get(v.pub)?.size ?? 0,
+    };
+  };
 
   const routes = [
     ['GET', /^\/api\/info$/, () => ok({
@@ -51,7 +75,9 @@ export function createRouter({ chain, consensus, facilitator, services, payee, k
       height: chain.height, tipHash: chain.tip.hash, genesisHash: chain.genesis.hash, blockIntervalMs: BLOCK_INTERVAL_MS,
       initialReward: INITIAL_REWARD.toString(), halvingInterval: HALVING_INTERVAL,
       minFees: Object.fromEntries(Object.entries(MIN_FEE).map(([k, v]) => [k, v.toString()])),
-      validators, faucet: keys.faucet.address, facilitator: keys.facilitator.address,
+      validators: activeValidators(), faucet: keys.faucet.address, facilitator: keys.facilitator.address,
+      poh: { tickMs: TICK_MS, hashesPerTick: HASHES_PER_TICK, ticksPerSlot: TICKS_PER_SLOT, slotsPerEpoch: SLOTS_PER_EPOCH, leaderSlots: LEADER_SLOTS },
+      staking: { minValidatorStake: MIN_VALIDATOR_STAKE.toString(), minDelegation: MIN_DELEGATION.toString(), maxValidators: MAX_VALIDATORS, maxCommissionBps: MAX_COMMISSION_BPS, unbondingEpochs: UNBONDING_EPOCHS, slashBps: SLASH_BPS, reporterRewardBps: REPORTER_REWARD_BPS },
       zk: { commitment: 'Pedersen (secp256k1)', H: H.toHex(), rangeProofBits: RANGE_BITS, rangeProof: 'bit-decomposition CDS OR-proofs (Fiat–Shamir)', stealth: 'one-time keys P = Hs(rA)G + B' },
       x402: { version: X402_VERSION, schemes: facilitator.supported().kinds.map((k) => k.scheme) },
     })],
@@ -69,15 +95,20 @@ export function createRouter({ chain, consensus, facilitator, services, payee, k
 
     ['GET', /^\/api\/blocks$/, (req) => {
       const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
-      return ok({ blocks: chain.blocks.slice(-limit).reverse().map((b) => ({ ...blockSummary(b), round: b.round, signers: b.commit?.votes.length ?? 0, proposerName: validatorName.get(b.proposer) ?? 'genesis' })) });
+      return ok({ blocks: chain.blocks.slice(-limit).reverse().map((b) => ({ ...blockSummary(b), proposerName: b.height ? nameOf(b.proposer) : 'genesis' })) });
     }],
 
     ['GET', /^\/api\/blocks\/([0-9a-f]+)$/, (req, [id]) => {
       const b = id.length === 64 ? chain.blocks.find((x) => x.hash === id) : chain.blocks[Number(id)];
       if (!b) return err(404, 'block not found');
       const { allocations, validators: vs, ...rest } = b;
-      const commit = b.commit ? { signers: b.commit.votes.map((v) => validatorName.get(v.validator) ?? v.validator), stakePct: Number((chain.commitPower(b, { checkSigs: false }) * 10000n) / chain.totalStake) / 100 } : null;
-      return ok({ ...rest, commit, proposerName: validatorName.get(b.proposer) ?? 'genesis', allocations, validators: vs, txs: b.txs.map((t) => ({ ...summarizeTx(t, txHash(t)), raw: displayTx(t) })) });
+      let commit = null;
+      if (b.commit) {
+        let stakePct = null;
+        try { const { power, total } = chain.commitPower(b, { checkSigs: false }); stakePct = bpsPct(power, total); } catch { /* snapshot pruned for old epochs */ }
+        commit = { round: b.commit.round, signers: b.commit.votes.map((v) => nameOf(v.validator)), stakePct };
+      }
+      return ok({ ...rest, epoch: epochOf(b.slot), commit, proposerName: b.height ? nameOf(b.proposer) : 'genesis', allocations, validators: vs, txs: b.txs.map((t) => ({ ...summarizeTx(t, txHash(t)), raw: displayTx(t) })) });
     }],
 
     ['GET', /^\/api\/tx\/([0-9a-f]{64})$/, (req, [hash]) => {
@@ -149,9 +180,46 @@ export function createRouter({ chain, consensus, facilitator, services, payee, k
 
     // ---- validator cluster ----
     ['GET', /^\/api\/consensus$/, () => ok(consensus.status())],
+
+    // ---- Proof of History & Proof of Stake ----
+    ['GET', /^\/api\/poh$/, () => {
+      const c = consensus.status();
+      const tip = chain.tip;
+      const slot = c.slot;
+      return ok({
+        tip: { height: tip.height, slot: tip.slot, pohEnd: tip.pohEnd, pohTicks: tip.pohTicks },
+        live: { ...c.poh, round: c.round, slot, epoch: c.epoch, slotInEpoch: slot % SLOTS_PER_EPOCH, slotsPerEpoch: SLOTS_PER_EPOCH },
+        upcoming: c.upcoming,
+        recentBlocks: chain.blocks.slice(-12).filter((b) => b.height > 0).reverse().map((b) => ({ height: b.height, slot: b.slot, pohTicks: b.pohTicks, pohEnd: b.pohEnd, txs: b.txs.length, leader: nameOf(b.proposer) })),
+      });
+    }],
+    ['GET', /^\/api\/staking$/, () => {
+      const s = chain.state;
+      const bonded = [...s.validators.values()].reduce((n, v) => n + v.selfStake + v.delegated, 0n);
+      return ok({
+        epoch: s.epoch, nextEpochSlot: (epochOf(chain.slot) + 1) * SLOTS_PER_EPOCH, slot: chain.slot,
+        bonded: bonded.toString(), unbonding: s.unbonding.reduce((n, u) => n + u.amount, 0n).toString(), burned: s.burned.toString(),
+        active: activeValidators(),
+        validators: [...s.validators.values()].map(validatorView).sort((a, b) => { const x = BigInt(a.bonded), y = BigInt(b.bonded); return x === y ? (a.pub < b.pub ? -1 : 1) : y > x ? 1 : -1; }),
+        slashes: s.slashes.slice(-20).reverse(),
+        evidence: consensus.status().evidence,
+      });
+    }],
+    ['GET', /^\/api\/staking\/(vox1[0-9a-f]{40})$/, (req, [address]) => {
+      const s = chain.state;
+      const delegations = [];
+      for (const [pub, m] of s.delegations) if (m.has(address)) delegations.push({ validator: pub, name: nameOf(pub), amount: m.get(address).toString() });
+      for (const v of s.validators.values()) if (v.owner === address) delegations.push({ validator: v.pub, name: v.name, amount: v.selfStake.toString(), self: true });
+      return ok({
+        address, delegations,
+        unbonding: s.unbonding.filter((u) => u.address === address).map((u) => ({ ...u, amount: u.amount.toString(), name: nameOf(u.validator) })),
+        validator: [...s.validators.values()].filter((v) => v.owner === address).map(validatorView)[0] ?? null,
+      });
+    }],
     ['GET', /^\/p2p\/status$/, () => ok(consensus.status())],
     ['GET', /^\/p2p\/blocks$/, (req) => ok({ blocks: blocksFrom(chain, Number(req.query.from), Number(req.query.limit) || 50) })],
     ['POST', /^\/p2p\/tx$/, (req) => ok(consensus.onTx(req.body))],
+    ['POST', /^\/p2p\/hello$/, (req) => ok(consensus.onHello(req.body))],
     ['POST', /^\/p2p\/proposal$/, (req) => ok(consensus.onProposal(req.body))],
     ['POST', /^\/p2p\/vote$/, (req) => ok(consensus.onVote(req.body))],
     ['POST', /^\/p2p\/commit$/, (req) => ok(consensus.onCommit(req.body))],
