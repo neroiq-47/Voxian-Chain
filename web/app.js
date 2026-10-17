@@ -605,7 +605,7 @@ views.donate = {
     <section class="hero" style="text-align:center"><button type="button" class="bull-link" data-scroll="donate-options" aria-label="Show donation options"><img class="bull-big" src="assets/donate-bull-lg.png" alt="" width="168" height="168" /></button>
       <h1>Support <span>Voxian</span></h1>
       <p style="margin:0 auto">Voxian is built in the open. Donations fund independent security reviews (the white paper's step before any mainnet decision), public testnet infrastructure and development time.</p></section>
-    <div class="section" id="donate-options" data-donate-widget></div>
+    <div class="section" id="donate-options" data-donate-widget><div class="card notice">Donate on <a href="https://github.com/sponsors/neroiq-47" target="_blank" rel="noopener">GitHub Sponsors</a>, or send USDC/SOL on <b>Solana mainnet</b> to <code>5g4xQALSN81J1EseRkkb4GGWJiLAJCPRnoqUeB5jYWkk</code>. (The amount picker needs JavaScript.)</div></div>
     <div class="card section"><h3>Sponsor tiers</h3><div class="table-wrap"><table><tr><th>Tier</th><th>Monthly</th><th>Benefits</th></tr>
       ${TIERS.map(([icon, name, price, perks]) => `<tr><td>${icon} <b>${name}</b></td><td class="tier-price volt">${price}</td><td class="small">${perks}</td></tr>`).join('')}
     </table></div><p class="small muted">Organisations can sponsor from a GitHub organisation account. Full details are in <a href="https://github.com/neroiq-47/Voxian-Chain/blob/main/docs/SPONSORS.md" target="_blank" rel="noopener">docs/SPONSORS.md</a>.</p></div>

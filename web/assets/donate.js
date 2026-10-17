@@ -50,6 +50,7 @@
     '.vd-status{font-size:11px;letter-spacing:.08em;color:#6ee7a8;min-height:16px;margin-top:6px;text-align:center}' +
     '.vd-note{font-size:11px;color:#7e7585;margin:14px 0 0}' +
     '.vd :focus-visible{outline:2px solid #b65cff;outline-offset:2px}' +
+    '.vd-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}' +
     '@media(max-width:760px){.vd-grid{grid-template-columns:1fr}.vd-amts{grid-template-columns:repeat(2,1fr)}}';
 
   function injectCss() {
@@ -75,7 +76,9 @@
     var m = METHODS[method];
     var s = String(raw || '').trim().replace(/[$,\s]/g, '');
     if (!s) return { error: 'Choose or enter an amount.' };
-    if (!/^\d+(\.\d+)?$/.test(s)) return { error: 'Enter a number, like 25 or 0.5.' };
+    if (!/^(\d+\.?\d*|\.\d+)$/.test(s)) return { error: 'Enter a number, like 25 or 0.5.' };
+    if (s.charAt(0) === '.') s = '0' + s;
+    if (s.charAt(s.length - 1) === '.') s = s.slice(0, -1); // "5." while typing means 5
     var parts = s.split('.');
     if (parts[1] && parts[1].length > m.decimals) {
       return { error: m.decimals === 0 ? 'GitHub Sponsors takes whole dollars.' : m.unit + ' supports up to ' + m.decimals + ' decimals.' };
@@ -143,14 +146,58 @@
     injectCss();
     var state = { method: root.getAttribute('data-method') || 'usdc', amountText: '25', preset: 25, frequency: 'one-time' };
 
-    function render() {
-      var m = METHODS[state.method];
+    function current() {
       var parsed = parseAmount(state.amountText, state.method);
       var valid = !parsed.error;
       var isCrypto = state.method !== 'github';
       var payUrl = valid ? (isCrypto ? solanaPayUrl(state.method, parsed.text) : sponsorsUrl(parsed.text, state.frequency)) : '';
-      var tier = valid && state.method !== 'sol' ? tierFor(parsed.value) : null;
+      return { m: METHODS[state.method], parsed: parsed, valid: valid, isCrypto: isCrypto, payUrl: payUrl };
+    }
 
+    // The summary/QR/actions column. Rebuilt on every amount change; the inputs on the left are not,
+    // so typing never loses focus and assistive tech isn't flooded with re-inserted regions.
+    function summaryHtml(c) {
+      var m = c.m, parsed = c.parsed;
+      var tier = c.valid && state.method !== 'sol' ? tierFor(parsed.value) : null;
+      var html = '';
+      if (c.valid) {
+        html += '<div class="vd-total">' + esc(c.isCrypto ? Number(parsed.text).toLocaleString('en-US', { maximumFractionDigits: m.decimals }) : fmt(parsed.value, 'github')) + '<small>' + m.unit + (state.method === 'github' && state.frequency === 'monthly' ? ' / month' : '') + '</small></div>' +
+          '<div class="vd-net">' + (c.isCrypto ? 'Solana mainnet' : 'GitHub Sponsors · ' + state.frequency) + (tier ? ' · ' + esc(tier) + ' tier' : '') + '</div>';
+      } else {
+        html += '<div class="vd-total" style="color:#7e7585">—</div><div class="vd-net">Choose an amount</div>';
+      }
+      if (c.isCrypto) {
+        html += (c.valid ? '<div class="vd-qr">' + qrSvg(c.payUrl) + '</div>' : '') +
+          '<div class="vd-actions"><a class="vd-btn vd-primary" data-act="pay" href="' + esc(c.payUrl || '#') + '" aria-disabled="' + !c.valid + '">Open in wallet</a>' +
+          '<div class="vd-row"><button type="button" class="vd-btn" data-act="copy-link"' + (c.valid ? '' : ' aria-disabled="true"') + '>Copy pay link</button>' +
+          '<button type="button" class="vd-btn" data-act="copy-addr">Copy address</button></div></div>' +
+          '<div class="vd-addr" tabindex="0" role="button" aria-label="Donation address, press Enter to copy" data-act="copy-addr">' + CONFIG.address + '</div>' +
+          '<div class="vd-status" aria-live="polite"></div>' +
+          '<p class="vd-hint">Scan with Phantom, Solflare or any Solana Pay wallet, or tap Open in wallet on your phone. ' +
+          (state.method === 'usdc' ? 'USDC (SPL) only.' : 'Native SOL.') + ' Transfers cannot be reversed.</p>';
+      } else {
+        html += '<div class="vd-actions"><a class="vd-btn vd-primary" data-act="pay" href="' + esc(c.payUrl || '#') + '" target="_blank" rel="noopener" aria-disabled="' + !c.valid + '">Continue on GitHub ↗</a></div>' +
+          '<p class="vd-hint">You confirm the amount on GitHub. Card and PayPal are accepted there, and GitHub takes no fee on personal accounts.</p>';
+      }
+      return html;
+    }
+
+    function update() {
+      var c = current();
+      root.querySelector('.vd-sum').innerHTML = summaryHtml(c);
+      var err = root.querySelector('.vd-err');
+      var msg = c.valid ? '' : c.parsed.error;
+      if (err.textContent !== msg) err.textContent = msg; // live region: announced only when it changes
+      var sr = root.querySelector('.vd-sr');
+      var said = c.valid ? c.parsed.text + ' ' + c.m.unit + (c.isCrypto ? ' on Solana' : ' via GitHub Sponsors, ' + state.frequency) : '';
+      if (sr.textContent !== said) sr.textContent = said;
+      var btns = root.querySelectorAll('.vd-amts button');
+      for (var i = 0; i < btns.length; i++) btns[i].setAttribute('aria-pressed', String(state.preset === Number(btns[i].dataset.amount)));
+      root.__payUrl = c.payUrl;
+    }
+
+    function render() {
+      var m = METHODS[state.method];
       var html = '<div class="vd" role="group" aria-label="Donate to Voxian">' +
         '<div class="vd-grid"><div>' +
         '<p class="vd-k">1 · Pay with</p><div class="vd-seg" role="group" aria-label="Payment method">';
@@ -159,63 +206,53 @@
       });
       html += '</div><p class="vd-k">2 · Amount' + (state.method === 'sol' ? ' (SOL)' : ' (USD)') + '</p><div class="vd-amts" role="group" aria-label="Preset amounts">';
       m.presets.forEach(function (p) {
-        html += '<button type="button" data-amount="' + p.amount + '" aria-pressed="' + (state.preset === p.amount) + '"><b>' + esc(fmt(p.amount, state.method)) + '</b><span>' + esc(p.tier || '') + '</span></button>';
+        html += '<button type="button" data-amount="' + p.amount + '" aria-pressed="false"><b>' + esc(fmt(p.amount, state.method)) + '</b><span>' + esc(p.tier || '') + '</span></button>';
       });
       html += '</div><label class="vd-custom"><span>' + (m.prefix || '◎') + '</span><input type="text" inputmode="decimal" autocomplete="off" aria-label="Custom amount in ' + m.unit + '" placeholder="Custom amount" value="' + esc(state.preset === null ? state.amountText : '') + '"><em>' + m.unit + '</em></label>' +
-        '<div class="vd-err" role="alert">' + (valid ? '' : esc(parsed.error)) + '</div>';
+        '<div class="vd-err" aria-live="polite"></div>';
       if (state.method === 'github') {
         html += '<p class="vd-k" style="margin-top:6px">3 · Frequency</p><div class="vd-freq" role="group" aria-label="Frequency">' +
           '<button type="button" data-freq="one-time" aria-pressed="' + (state.frequency === 'one-time') + '">One-time</button>' +
           '<button type="button" data-freq="monthly" aria-pressed="' + (state.frequency === 'monthly') + '">Monthly</button></div>';
       }
-      html += '</div><div class="vd-sum" aria-live="polite">';
-      if (valid) {
-        html += '<div class="vd-total">' + esc(isCrypto ? Number(parsed.text).toLocaleString('en-US', { maximumFractionDigits: m.decimals }) : fmt(parsed.value, 'github')) + '<small>' + m.unit + (state.method === 'github' && state.frequency === 'monthly' ? ' / month' : '') + '</small></div>' +
-          '<div class="vd-net">' + (isCrypto ? 'Solana mainnet' : 'GitHub Sponsors · ' + state.frequency) + (tier ? ' · ' + esc(tier) + ' tier' : '') + '</div>';
-      } else {
-        html += '<div class="vd-total" style="color:#7e7585">—</div><div class="vd-net">Choose an amount</div>';
-      }
-      if (isCrypto) {
-        html += (valid ? '<div class="vd-qr">' + qrSvg(payUrl) + '</div>' : '') +
-          '<div class="vd-actions"><a class="vd-btn vd-primary" data-act="pay" href="' + esc(payUrl || '#') + '" aria-disabled="' + !valid + '">Open in wallet</a>' +
-          '<div class="vd-row"><button type="button" class="vd-btn" data-act="copy-link"' + (valid ? '' : ' aria-disabled="true"') + '>Copy pay link</button>' +
-          '<button type="button" class="vd-btn" data-act="copy-addr">Copy address</button></div></div>' +
-          '<div class="vd-addr" tabindex="0" role="button" aria-label="Donation address, press Enter to copy" data-act="copy-addr">' + CONFIG.address + '</div>' +
-          '<div class="vd-status" aria-live="polite"></div>' +
-          '<p class="vd-hint">Scan with Phantom, Solflare or any Solana Pay wallet, or tap Open in wallet on your phone. ' +
-          (state.method === 'usdc' ? 'USDC (SPL) only.' : 'Native SOL.') + ' Transfers cannot be reversed.</p>';
-      } else {
-        html += '<div class="vd-actions"><a class="vd-btn vd-primary" data-act="pay" href="' + esc(payUrl || '#') + '" target="_blank" rel="noopener" aria-disabled="' + !valid + '">Continue on GitHub ↗</a></div>' +
-          '<p class="vd-hint">You confirm the amount on GitHub. Card and PayPal are accepted there, and GitHub takes no fee on personal accounts.</p>';
-      }
-      html += '</div></div><p class="vd-note">Donations are gifts to open-source development: not an investment or a token sale, and they don\'t buy or reserve any VOX.</p></div>';
-
-      var hadFocus = root.contains(document.activeElement) && document.activeElement.tagName === 'INPUT';
-      var caret = hadFocus ? document.activeElement.selectionStart : null;
+      html += '</div><div class="vd-sum"></div></div><div class="vd-sr" aria-live="polite"></div>' +
+        '<p class="vd-note">Donations are gifts to open-source development: not an investment or a token sale, and they don\'t buy or reserve any VOX.</p></div>';
       root.innerHTML = html;
-      if (hadFocus) {
-        var inp = root.querySelector('.vd-custom input');
-        inp.focus();
-        try { inp.setSelectionRange(caret, caret); } catch (e) { /* ignore */ }
-      }
-      root.__payUrl = payUrl;
+      update();
     }
 
     root.addEventListener('click', function (e) {
       var t = e.target.closest('button, [data-act]');
       if (!t || !root.contains(t)) return;
       if (t.dataset.method) {
-        state.method = t.dataset.method;
-        state.preset = state.method === 'sol' ? 1 : 25;
-        state.amountText = String(state.preset);
+        var from = state.method, to = t.dataset.method;
+        if (from === to) return;
+        state.method = to;
+        if (from === 'sol' || to === 'sol') { state.preset = to === 'sol' ? 1 : 25; state.amountText = String(state.preset); }
+        // USDC <-> GitHub are both USD: keep what the donor chose.
         return render();
       }
-      if (t.dataset.amount) { state.preset = Number(t.dataset.amount); state.amountText = t.dataset.amount; return render(); }
+      if (t.dataset.amount) {
+        state.preset = Number(t.dataset.amount);
+        state.amountText = t.dataset.amount;
+        root.querySelector('.vd-custom input').value = '';
+        return update();
+      }
       if (t.dataset.freq) { state.frequency = t.dataset.freq; return render(); }
       var status = root.querySelector('.vd-status');
       if (t.dataset.act === 'copy-addr') { e.preventDefault(); copyText(CONFIG.address, root.querySelector('.vd-addr'), status); }
       if (t.dataset.act === 'copy-link' && root.__payUrl) { e.preventDefault(); copyText(root.__payUrl, null, status); }
-      if (t.dataset.act === 'pay' && !root.__payUrl) e.preventDefault();
+      if (t.dataset.act === 'pay' && !root.__payUrl) { e.preventDefault(); return; }
+      if (t.dataset.act === 'pay' && state.method !== 'github') {
+        var startedHidden = false;
+        var onVis = function () { if (document.visibilityState === 'hidden') startedHidden = true; };
+        document.addEventListener('visibilitychange', onVis);
+        setTimeout(function () {
+          document.removeEventListener('visibilitychange', onVis);
+          var st = root.querySelector('.vd-status');
+          if (!startedHidden && st) st.textContent = 'No wallet opened? Scan the QR code with your phone, or copy the pay link.';
+        }, 1500);
+      }
     });
     root.addEventListener('keydown', function (e) {
       if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('vd-addr')) { e.preventDefault(); copyText(CONFIG.address, e.target, root.querySelector('.vd-status')); }
@@ -224,7 +261,7 @@
       if (!e.target.matches('.vd-custom input')) return;
       state.amountText = e.target.value;
       state.preset = null;
-      render();
+      update();
     });
     render();
   }
