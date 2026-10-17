@@ -34,8 +34,11 @@ nav a { color: var(--muted); padding: 6px 12px; border-radius: 999px; font-weigh
 nav a:hover { color: var(--text); text-decoration: none; background: var(--card); }
 nav a.active { color: var(--text); background: var(--card2); box-shadow: inset 0 0 0 1px var(--line); }
 .status { margin-left: auto; display: flex; gap: 8px; }
-.donate-btn { font-size: 0.8rem; font-weight: 700; padding: 4px 12px; border-radius: 999px; color: #0a0a12; background: linear-gradient(135deg, #f472b6 0%, var(--volt) 100%); white-space: nowrap; box-shadow: 0 0 14px rgba(244, 114, 182, 0.35); }
-.donate-btn:hover { text-decoration: none; filter: brightness(1.08); }
+.donate-btn { display: inline-flex; align-items: center; gap: 6px; padding: 2px 12px 2px 2px; border-radius: 999px; font-size: 0.78rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: #39ff6a; background: #0b120d; border: 1px solid rgba(57, 255, 106, 0.45); white-space: nowrap; box-shadow: 0 0 14px rgba(57, 255, 106, 0.18); transition: box-shadow 0.2s, transform 0.2s; }
+.donate-btn img { width: 34px; height: 34px; border-radius: 50%; display: block; }
+.donate-btn:hover { text-decoration: none; transform: translateY(-1px); box-shadow: 0 0 22px rgba(57, 255, 106, 0.45); }
+.bull-big { display: block; width: 168px; height: 168px; margin: 0 auto 6px; border-radius: 50%; filter: drop-shadow(0 0 22px rgba(57, 255, 106, 0.35)); transition: transform 0.25s, filter 0.25s; }
+a:hover > .bull-big { transform: scale(1.05) rotate(-2deg); filter: drop-shadow(0 0 34px rgba(57, 255, 106, 0.6)); }
 .tier-price { font-size: 1.2rem; font-weight: 700; }
 .badge { font-size: 0.78rem; padding: 4px 10px; border-radius: 999px; background: var(--card); border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
 .badge.live::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); margin-right: 6px; box-shadow: 0 0 8px var(--green); animation: pulse 2s infinite; }

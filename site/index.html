@@ -32,11 +32,14 @@ section{padding:70px 0}.section-head{max-width:700px;margin-bottom:30px}.kicker{
 .tiers{display:grid;grid-template-columns:repeat(3,1fr);gap:13px}.tier{border:1px solid var(--line);padding:22px;background:#0f0c10;position:relative}.tier.featured{border-color:#b65cff77;background:linear-gradient(145deg,#b65cff16,#0f0c10 55%)}.tier .name{font-size:12px;letter-spacing:.18em;text-transform:uppercase;font-weight:900;color:#e8d5ff}.tier .price{font-size:34px;font-weight:900;letter-spacing:-.05em;margin:6px 0 2px}.tier .price small{font-size:12px;color:var(--muted);letter-spacing:0;font-weight:600}.tier p{font-size:13px;color:var(--muted);margin:8px 0 0}
 .donate{display:grid;grid-template-columns:1fr 1fr;gap:13px;margin-top:13px}.address{font-family:var(--mono);font-size:13px;word-break:break-all;border:1px solid var(--line);background:#09070b;padding:12px 14px;margin:12px 0;color:#e8d5ff}.warn{color:#d9a8ff}
 .cta{border:1px solid #b65cff55;padding:32px;background:linear-gradient(105deg,#b65cff12,transparent 65%);display:flex;justify-content:space-between;align-items:center;gap:24px}.cta h2{font-size:clamp(26px,3vw,38px);margin:9px 0}.cta p{color:var(--muted);margin:0;max-width:620px}.disclaimer{font-size:11px;color:#7e7585;margin-top:18px}
+.bull-btn{display:inline-flex;align-items:center;gap:8px;padding:3px 14px 3px 3px;border:1px solid #39ff6a66;border-radius:999px;background:#0b120d;color:#39ff6a;font-weight:900;font-size:11px;letter-spacing:.14em;text-transform:uppercase;box-shadow:0 0 16px #39ff6a22;transition:.2s}.bull-btn img{width:36px;height:36px;border-radius:50%;display:block}.bull-btn:hover{transform:translateY(-2px);box-shadow:0 0 26px #39ff6a55;color:#7dff9b}
+.bull-hero{display:grid;place-items:center;text-align:center;margin:0 auto 34px;max-width:520px}.bull-hero a{display:block;border-radius:50%}.bull-hero img{width:220px;height:220px;display:block;border-radius:50%;filter:drop-shadow(0 0 26px #39ff6a55);animation:breathe 3.2s ease-in-out infinite;transition:transform .25s}.bull-hero a:hover img{transform:scale(1.06) rotate(-2deg);filter:drop-shadow(0 0 40px #39ff6a99)}.bull-hero .cap{margin-top:12px;font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:#7dff9b;font-weight:900}
+@keyframes breathe{50%{filter:drop-shadow(0 0 38px #39ff6a88)}}@media(prefers-reduced-motion:reduce){.bull-hero img{animation:none}}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);opacity:0;background:#140f17;border:1px solid var(--purple);color:#e8d5ff;padding:10px 16px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;transition:.25s;pointer-events:none}.toast.show{opacity:1;transform:translateX(-50%)}
 footer{border-top:1px solid #ffffff12;padding:25px 0;color:#817886;font-size:11px;letter-spacing:.04em}.foot{display:flex;justify-content:space-between;gap:15px;align-items:center}.foot a:hover{color:var(--purple)}.foot .links{display:flex;gap:18px}
 @media(max-width:900px){.stats{grid-template-columns:repeat(3,1fr)}.stat:nth-child(3){border-right:0}.stat:nth-child(-n+3){border-bottom:1px solid var(--line)}}
-@media(max-width:800px){.hero{grid-template-columns:1fr;gap:40px;padding-top:52px}.mascot-frame{max-width:340px}.cards,.tiers,.donate{grid-template-columns:1fr}.card{min-height:auto}.split{grid-template-columns:1fr;gap:20px}.navlinks{gap:14px}.navlinks a:not(.button){display:none}.banner img{min-height:180px;object-fit:cover}.cta{align-items:flex-start;flex-direction:column}}
-@media(max-width:480px){.wrap{width:calc(100% - 28px)}nav{height:72px}.brand{font-size:12px;letter-spacing:.12em}.hero{padding:45px 0 55px}h1{font-size:54px}.lead{font-size:15px}section{padding:52px 0}.banner-label{font-size:24px}.foot{align-items:flex-start;flex-direction:column}.stats{grid-template-columns:repeat(2,1fr)}.stat{border-right:0!important;border-bottom:1px solid var(--line)}.navlinks .button:not(.primary){display:none}}
+@media(max-width:800px){.hero{grid-template-columns:1fr;gap:40px;padding-top:52px}.mascot-frame{max-width:340px}.cards,.tiers,.donate{grid-template-columns:1fr}.card{min-height:auto}.split{grid-template-columns:1fr;gap:20px}.navlinks{gap:14px}.navlinks a:not(.button):not(.bull-btn){display:none}.banner img{min-height:180px;object-fit:cover}.cta{align-items:flex-start;flex-direction:column}}
+@media(max-width:480px){.wrap{width:calc(100% - 28px)}nav{height:72px}.brand{font-size:12px;letter-spacing:.12em}.hero{padding:45px 0 55px}h1{font-size:54px}.lead{font-size:15px}section{padding:52px 0}.banner-label{font-size:24px}.foot{align-items:flex-start;flex-direction:column}.stats{grid-template-columns:repeat(2,1fr)}.stat{border-right:0!important;border-bottom:1px solid var(--line)}.navlinks .button:not(.primary){display:none}.bull-btn span{display:none}.bull-btn{padding:3px}}
 </style>
 </head>
 <body>
@@ -49,6 +52,7 @@ footer{border-top:1px solid #ffffff12;padding:25px 0;color:#817886;font-size:11p
       <a href="#run">Run it</a>
       <a href="#support">Support</a>
       <a class="button" href="https://github.com/neroiq-47/Voxian-Chain" target="_blank" rel="noopener">GitHub ↗</a>
+      <a class="bull-btn" href="#support" aria-label="Donate to Voxian"><img src="assets/donate-bull.png" alt="" width="36" height="36"><span>Donate</span></a>
       <a class="button primary" href="app/">Live demo</a>
     </div>
   </nav>
@@ -162,6 +166,10 @@ footer{border-top:1px solid #ffffff12;padding:25px 0;color:#817886;font-size:11p
         <div class="kicker">Support the build</div>
         <h2>Fund what comes next.</h2>
         <p>Sponsorship funds independent security reviews, testnet infrastructure and development. Pick a tier, from budget-friendly to enterprise.</p>
+      </div>
+      <div class="bull-hero">
+        <a href="https://github.com/sponsors/neroiq-47" target="_blank" rel="noopener" aria-label="Donate: sponsor Voxian on GitHub"><img src="assets/donate-bull.png" alt="Voxian bull: tap to donate" width="220" height="220"></a>
+        <div class="cap">Tap the bull to donate</div>
       </div>
       <div class="tiers">
         <div class="tier"><div class="name">☕ Supporter</div><div class="price">$5<small> / month</small></div><p>Sponsor badge and thanks in the monthly update.</p></div>

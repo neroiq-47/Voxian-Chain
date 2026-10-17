@@ -603,8 +603,9 @@ const TIERS = [
 ];
 views.donate = {
   render: () => `
-    <section class="hero"><h1>Support <span>Voxian</span> ❤️</h1>
-      <p>Voxian is built in the open. Donations fund independent security reviews (the white paper's step before any mainnet decision), public testnet infrastructure and development time.</p></section>
+    <section class="hero" style="text-align:center"><a href="${SPONSORS_URL}" target="_blank" rel="noopener" title="Sponsor on GitHub"><img class="bull-big" src="assets/donate-bull-lg.png" alt="Voxian bull: donate" width="168" height="168" /></a>
+      <h1>Support <span>Voxian</span></h1>
+      <p style="margin:0 auto">Voxian is built in the open. Donations fund independent security reviews (the white paper's step before any mainnet decision), public testnet infrastructure and development time.</p></section>
     <div class="grid g2 section">
       <div class="card glow"><h3>GitHub Sponsors</h3>
         <p class="small muted">Monthly or one-time, any amount. GitHub takes no fees on personal accounts, so it all reaches the project.</p>
