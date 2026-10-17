@@ -86,15 +86,18 @@ const views = {};
 
 views.overview = {
   render: () => `
-    <section class="hero">
+    <section class="hero hero-split">
+    <div>
       <div class="eyebrow">Live devnet · ${mode === 'browser' ? 'running in your browser' : 'full node'}</div>
       <h1>Privacy meets the <span>autonomous economy.</span></h1>
       <p>Voxian is a Layer 1 blockchain combining zero-knowledge technology with x402 payments, so people, apps and AI agents can pay for
       digital services privately, securely and automatically. This is a live devnet. Every block, proof and payment below is real and runs ${mode === 'browser' ? 'in your browser' : 'on this node'}.</p>
       <div class="pills"><span class="pill">🌐 Built for AI agents, APIs &amp; services</span><span class="pill">🔐 ZK confidential notes</span><span class="pill">⚡ x402 programmable payments</span><span class="pill">⛓️ Independent Layer 1</span></div>
       <div class="row" style="margin-top:14px"><a class="btn" href="#wallet">Open wallet →</a><a class="btn ghost" href="#agent">Run an AI agent</a></div>
+    </div>
+      <figure class="mascot-frame"><img class="mascot" src="assets/mask.jpg" alt="" width="390" height="390" /><figcaption class="image-tag">Voxian // agent protocol</figcaption></figure>
     </section>
-    <div class="grid g4 section" id="stats"></div>
+    <div class="grid g4 section stats-strip" id="stats"></div>
     <div class="grid g3 section">
       <div class="card span2"><div class="row between"><h3>Latest blocks</h3><a href="#explorer" class="small">Explorer →</a></div><div class="table-wrap" id="blocks"></div></div>
       <div class="card"><h3>Supply</h3><div id="supply"></div></div>
@@ -378,7 +381,7 @@ views.staking = {
       <div class="card span2"><div class="row between"><h3>Proof of History clock</h3><span class="small muted" id="s-poh-mode"></span></div><div id="s-poh"><p class="muted small">Loading…</p></div></div>
       <div class="card"><h3>Upcoming leaders</h3><div id="s-leaders"></div></div>
     </div>
-    <div class="grid g4 section" id="s-stats"></div>
+    <div class="grid g4 section stats-strip" id="s-stats"></div>
     <div class="card section"><div class="row between"><h3>Validators</h3><span class="small muted">up to ${esc(st.maxValidators ?? 16)} active · set recomputed each epoch</span></div><div class="table-wrap" id="s-validators"></div></div>
     <div class="grid g3 section">
       <div class="card"><h3>Delegate</h3><p class="small muted">Bond VOX to a validator. You earn a share of its block rewards and fees after its commission. Min ${vox(st.minDelegation)}.</p>
