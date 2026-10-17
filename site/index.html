@@ -30,7 +30,7 @@ section{padding:70px 0}.section-head{max-width:700px;margin-bottom:30px}.kicker{
 .terminal{border:1px solid var(--line);background:#0b090c;font-family:var(--mono);font-size:13px;line-height:1.9;padding:22px 24px;overflow-x:auto;position:relative}.terminal:before{content:"● ● ●";position:absolute;top:10px;right:16px;font-size:9px;letter-spacing:.3em;color:#4a3d52}.terminal .c{color:#6f6676}.terminal .p{color:var(--purple)}
 .roadmap .step.done{border-color:#b65cff66;background:linear-gradient(105deg,#b65cff14,#110e13 60%)}.status{font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:#7e7585;margin-left:8px;font-weight:800}.done .status{color:var(--purple)}
 .tiers{display:grid;grid-template-columns:repeat(3,1fr);gap:13px}.tier{border:1px solid var(--line);padding:22px;background:#0f0c10;position:relative}.tier.featured{border-color:#b65cff77;background:linear-gradient(145deg,#b65cff16,#0f0c10 55%)}.tier .name{font-size:12px;letter-spacing:.18em;text-transform:uppercase;font-weight:900;color:#e8d5ff}.tier .price{font-size:34px;font-weight:900;letter-spacing:-.05em;margin:6px 0 2px}.tier .price small{font-size:12px;color:var(--muted);letter-spacing:0;font-weight:600}.tier p{font-size:13px;color:var(--muted);margin:8px 0 0}
-.donate{display:grid;grid-template-columns:1fr 1fr;gap:13px;margin-top:13px}.address{font-family:var(--mono);font-size:13px;word-break:break-all;border:1px solid var(--line);background:#09070b;padding:12px 14px;margin:12px 0;color:#e8d5ff}.warn{color:#d9a8ff}
+.donate{display:grid;grid-template-columns:1fr 1fr;gap:13px;margin-top:13px}.address:focus-visible,.button:focus-visible,.bull-btn:focus-visible,.bull-hero a:focus-visible{outline:2px solid var(--purple);outline-offset:3px}.address{cursor:pointer;font-family:var(--mono);font-size:13px;word-break:break-all;border:1px solid var(--line);background:#09070b;padding:12px 14px;margin:12px 0;color:#e8d5ff}.warn{color:#d9a8ff}
 .cta{border:1px solid #b65cff55;padding:32px;background:linear-gradient(105deg,#b65cff12,transparent 65%);display:flex;justify-content:space-between;align-items:center;gap:24px}.cta h2{font-size:clamp(26px,3vw,38px);margin:9px 0}.cta p{color:var(--muted);margin:0;max-width:620px}.disclaimer{font-size:11px;color:#7e7585;margin-top:18px}
 .bull-btn{display:inline-flex;align-items:center;gap:8px;padding:3px 14px 3px 3px;border:1px solid #39ff6a66;border-radius:999px;background:#0b120d;color:#39ff6a;font-weight:900;font-size:11px;letter-spacing:.14em;text-transform:uppercase;box-shadow:0 0 16px #39ff6a22;transition:.2s}.bull-btn img{width:36px;height:36px;border-radius:50%;display:block}.bull-btn:hover{transform:translateY(-2px);box-shadow:0 0 26px #39ff6a55;color:#7dff9b}
 .bull-hero{display:grid;place-items:center;text-align:center;margin:0 auto 34px;max-width:520px}.bull-hero a{display:block;border-radius:50%}.bull-hero img{width:220px;height:220px;display:block;border-radius:50%;filter:drop-shadow(0 0 26px #39ff6a55);animation:breathe 3.2s ease-in-out infinite;transition:transform .25s}.bull-hero a:hover img{transform:scale(1.06) rotate(-2deg);filter:drop-shadow(0 0 40px #39ff6a99)}.bull-hero .cap{margin-top:12px;font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:#7dff9b;font-weight:900}
@@ -168,7 +168,7 @@ footer{border-top:1px solid #ffffff12;padding:25px 0;color:#817886;font-size:11p
         <p>Sponsorship funds independent security reviews, testnet infrastructure and development. Pick a tier, from budget-friendly to enterprise.</p>
       </div>
       <div class="bull-hero">
-        <a href="https://github.com/sponsors/neroiq-47" target="_blank" rel="noopener" aria-label="Donate: sponsor Voxian on GitHub"><img src="assets/donate-bull.png" alt="Voxian bull: tap to donate" width="220" height="220"></a>
+        <a href="#donate-options" aria-label="Donate: show donation options"><img src="assets/donate-bull.png" alt="" width="220" height="220"></a>
         <div class="cap">Tap the bull to donate</div>
       </div>
       <div class="tiers">
@@ -179,15 +179,15 @@ footer{border-top:1px solid #ffffff12;padding:25px 0;color:#817886;font-size:11p
         <div class="tier featured"><div class="name">🏢 Enterprise</div><div class="price">$2,500<small> / month</small></div><p>2 hours a month of x402 and shielded-payment integration support.</p></div>
         <div class="tier featured"><div class="name">🏛 Enterprise Partner</div><div class="price">$10,000<small> / month</small></div><p>Top logo placement, 8 hours a month of support, and credit as a funder of the security review.</p></div>
       </div>
-      <div class="donate">
+      <div class="donate" id="donate-options">
         <div class="cta" style="flex-direction:column;align-items:flex-start">
           <div><div class="kicker">GitHub Sponsors</div><h2>Sponsor monthly</h2><p>Any amount, monthly or one-time. GitHub takes no fees on personal accounts, so it all reaches the project.</p></div>
           <a class="button primary" href="https://github.com/sponsors/neroiq-47" target="_blank" rel="noopener">❤ Sponsor on GitHub ↗</a>
         </div>
         <div class="cta" style="flex-direction:column;align-items:flex-start">
           <div><div class="kicker">Crypto · Solana</div><h2>Donate SOL / USDC</h2><p class="warn">Solana mainnet only. Transfers can't be reversed.</p>
-            <div class="address" id="sol">5g4xQALSN81J1EseRkkb4GGWJiLAJCPRnoqUeB5jYWkk</div></div>
-          <div class="actions" style="margin-top:0"><button class="button primary" type="button" data-copy="5g4xQALSN81J1EseRkkb4GGWJiLAJCPRnoqUeB5jYWkk">Copy address</button><a class="button" href="solana:5g4xQALSN81J1EseRkkb4GGWJiLAJCPRnoqUeB5jYWkk">Open in wallet</a></div>
+            <div class="address" id="sol" tabindex="0" role="button" data-copy="5g4xQALSN81J1EseRkkb4GGWJiLAJCPRnoqUeB5jYWkk" aria-label="Solana donation address, press Enter to copy" title="click to copy">5g4xQALSN81J1EseRkkb4GGWJiLAJCPRnoqUeB5jYWkk</div></div>
+          <div class="actions" style="margin-top:0"><button class="button primary" type="button" data-copy="5g4xQALSN81J1EseRkkb4GGWJiLAJCPRnoqUeB5jYWkk" data-select="sol">Copy address</button><a class="button" href="solana:5g4xQALSN81J1EseRkkb4GGWJiLAJCPRnoqUeB5jYWkk">Open in wallet</a></div>
         </div>
       </div>
       <p class="disclaimer">Donations are gifts to open-source development. They are not an investment, equity or a token sale, and they do not buy, reserve or promise any VOX. Full details are in <a href="https://github.com/neroiq-47/Voxian-Chain/blob/main/docs/SPONSORS.md" target="_blank" rel="noopener" style="color:var(--purple)">docs/SPONSORS.md</a>.</p>
@@ -214,13 +214,27 @@ footer{border-top:1px solid #ffffff12;padding:25px 0;color:#817886;font-size:11p
 </footer>
 <div class="toast" id="toast" role="status" aria-live="polite">Address copied</div>
 <script>
-document.addEventListener('click', (e) => {
-  const b = e.target.closest('[data-copy]');
-  if (!b) return;
-  const t = document.getElementById('toast');
-  const show = (msg) => { t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 1800); };
-  if (navigator.clipboard) navigator.clipboard.writeText(b.dataset.copy).then(() => show('Address copied'), () => show('Select the address to copy'));
-  else show('Select the address to copy');
+// Copy with fallbacks: async clipboard, then execCommand, then select the text for a manual copy.
+const toastEl = document.getElementById('toast');
+let toastTimer;
+function show(msg) { toastEl.textContent = msg; toastEl.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2400); }
+function selectText(el) { if (!el) return; const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+async function copy(btn) {
+  const el = document.getElementById(btn.dataset.select) || (btn.classList.contains('address') ? btn : null);
+  try {
+    if (!navigator.clipboard) throw new Error('no clipboard');
+    await navigator.clipboard.writeText(btn.dataset.copy);
+    show('Address copied');
+  } catch {
+    selectText(el);
+    let ok = false;
+    try { ok = el ? document.execCommand('copy') : false; } catch { /* unsupported */ }
+    show(ok ? 'Address copied' : 'Address selected: press Ctrl+C / ⌘C');
+  }
+}
+document.addEventListener('click', (e) => { const b = e.target.closest('[data-copy]'); if (b) copy(b); });
+document.addEventListener('keydown', (e) => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.address[data-copy]')) { e.preventDefault(); copy(e.target); }
 });
 </script>
 </body>

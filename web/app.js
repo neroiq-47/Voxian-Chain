@@ -92,7 +92,7 @@ views.overview = {
       <p>Voxian is a Layer 1 blockchain combining zero-knowledge technology with x402 payments, so people, apps and AI agents can pay for
       digital services privately, securely and automatically. This is a live devnet. Every block, proof and payment below is real and runs ${mode === 'browser' ? 'in your browser' : 'on this node'}.</p>
       <div class="pills"><span class="pill">🌐 Built for AI agents, APIs &amp; services</span><span class="pill">🔐 ZK confidential notes</span><span class="pill">⚡ x402 programmable payments</span><span class="pill">⛓️ Independent Layer 1</span></div>
-      <div class="row" style="margin-top:14px"><a href="#wallet"><button>Open wallet →</button></a><a href="#agent"><button class="ghost">Run an AI agent</button></a></div>
+      <div class="row" style="margin-top:14px"><a class="btn" href="#wallet">Open wallet →</a><a class="btn ghost" href="#agent">Run an AI agent</a></div>
     </section>
     <div class="grid g4 section" id="stats"></div>
     <div class="grid g3 section">
@@ -604,17 +604,17 @@ const TIERS = [
 ];
 views.donate = {
   render: () => `
-    <section class="hero" style="text-align:center"><a href="${SPONSORS_URL}" target="_blank" rel="noopener" title="Sponsor on GitHub"><img class="bull-big" src="assets/donate-bull-lg.png" alt="Voxian bull: donate" width="168" height="168" /></a>
+    <section class="hero" style="text-align:center"><button type="button" class="bull-link" data-scroll="donate-options" aria-label="Show donation options"><img class="bull-big" src="assets/donate-bull-lg.png" alt="" width="168" height="168" /></button>
       <h1>Support <span>Voxian</span></h1>
       <p style="margin:0 auto">Voxian is built in the open. Donations fund independent security reviews (the white paper's step before any mainnet decision), public testnet infrastructure and development time.</p></section>
-    <div class="grid g2 section">
+    <div class="grid g2 section" id="donate-options">
       <div class="card glow"><h3>GitHub Sponsors</h3>
         <p class="small muted">Monthly or one-time, any amount. GitHub takes no fees on personal accounts, so it all reaches the project.</p>
-        <a href="${SPONSORS_URL}" target="_blank" rel="noopener"><button>❤️ Sponsor on GitHub</button></a></div>
+        <a class="btn" href="${SPONSORS_URL}" target="_blank" rel="noopener">❤️ Sponsor on GitHub ↗</a></div>
       <div class="card glow"><h3>Donate with crypto (Solana)</h3>
         <p class="small muted">SOL or SPL tokens such as USDC. <b class="volt">Solana mainnet only.</b> Funds sent from another chain are lost, and transfers can't be reversed.</p>
-        <div class="addr copy" data-copy="${SOLANA_ADDRESS}" title="click to copy">${SOLANA_ADDRESS}</div>
-        <div class="row" style="margin-top:12px"><button class="ghost small" data-copy="${SOLANA_ADDRESS}">Copy address</button><a href="solana:${SOLANA_ADDRESS}"><button class="ghost small">Open in wallet</button></a></div></div>
+        <div class="addr copy" id="sol-address" data-copy="${SOLANA_ADDRESS}" tabindex="0" role="button" aria-label="Solana donation address, press Enter to copy" title="click to copy">${SOLANA_ADDRESS}</div>
+        <div class="row" style="margin-top:12px"><button type="button" class="ghost small" data-copy="${SOLANA_ADDRESS}" data-select="sol-address">Copy address</button><a class="btn ghost small" href="solana:${SOLANA_ADDRESS}">Open in wallet</a></div></div>
     </div>
     <div class="card section"><h3>Sponsor tiers</h3><div class="table-wrap"><table><tr><th>Tier</th><th>Monthly</th><th>Benefits</th></tr>
       ${TIERS.map(([icon, name, price, perks]) => `<tr><td>${icon} <b>${name}</b></td><td class="tier-price volt">${price}</td><td class="small">${perks}</td></tr>`).join('')}
@@ -678,11 +678,38 @@ async function refresh() {
   }
 }
 
+// Copy with fallbacks: async clipboard, then execCommand, then select the text for a manual copy.
+function selectText(el) {
+  if (!el) return;
+  const r = document.createRange();
+  r.selectNodeContents(el);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(r);
+}
+async function copyText(text, el) {
+  try {
+    if (!navigator.clipboard) throw new Error('no clipboard');
+    await navigator.clipboard.writeText(text);
+    toast('Copied', 'success');
+  } catch {
+    selectText(el);
+    let ok = false;
+    try { ok = el ? document.execCommand('copy') : false; } catch { /* unsupported */ }
+    toast(ok ? 'Copied' : 'Address selected: press Ctrl+C (⌘C on Mac) to copy', ok ? 'success' : '');
+  }
+}
+document.addEventListener('keydown', (e) => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches?.('.addr[data-copy]')) { e.preventDefault(); copyText(e.target.dataset.copy, e.target); }
+});
+
 document.addEventListener('click', (e) => {
   const go = e.target.closest('[data-go]');
   if (go && !e.target.closest('a')) location.hash = go.dataset.go;
   const c = e.target.closest('[data-copy]');
-  if (c) navigator.clipboard?.writeText(c.dataset.copy).then(() => toast('Copied'), () => {});
+  if (c) copyText(c.dataset.copy, document.getElementById(c.dataset.select) || (c.classList.contains('addr') ? c : null));
+  const sc = e.target.closest('[data-scroll]');
+  if (sc) document.getElementById(sc.dataset.scroll)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 });
 
 async function boot() {

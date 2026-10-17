@@ -46,7 +46,7 @@ nav a.active { color: var(--text); border-bottom-color: var(--violet); }
 .donate-btn img { width: 34px; height: 34px; border-radius: 50%; display: block; }
 .donate-btn:hover { text-decoration: none; transform: translateY(-1px); box-shadow: 0 0 22px rgba(57, 255, 106, 0.45); }
 .bull-big { display: block; width: 168px; height: 168px; margin: 0 auto 6px; border-radius: 50%; filter: drop-shadow(0 0 22px rgba(57, 255, 106, 0.35)); transition: transform 0.25s, filter 0.25s; }
-a:hover > .bull-big { transform: scale(1.05) rotate(-2deg); filter: drop-shadow(0 0 34px rgba(57, 255, 106, 0.6)); }
+a:hover > .bull-big, .bull-link:focus-visible .bull-big { transform: scale(1.05) rotate(-2deg); filter: drop-shadow(0 0 34px rgba(57, 255, 106, 0.6)); }
 .tier-price { font-size: 1.3rem; font-weight: 900; letter-spacing: -0.03em; }
 .badge { font-size: 0.66rem; padding: 6px 10px; border-radius: var(--radius); background: #0d0b0e; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; text-transform: uppercase; letter-spacing: 0.12em; font-weight: 700; }
 .badge.live::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--violet); margin-right: 7px; box-shadow: 0 0 8px var(--violet); animation: pulse 2s infinite; }
@@ -115,6 +115,14 @@ button.ghost { background: transparent; color: var(--text); border: 1px solid #b
 button.ghost:hover { border-color: var(--violet); }
 button.volt { background: var(--violet); }
 button.small { padding: 7px 11px; font-size: 0.66rem; }
+a.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 0.74rem; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; border: 1px solid var(--violet); border-radius: var(--radius); padding: 12px 17px; color: #100814; background: var(--violet); transition: transform 0.2s, box-shadow 0.2s; }
+a.btn:hover { color: #100814; transform: translateY(-2px); box-shadow: 0 0 24px #a83cff35; }
+a.btn.ghost { background: transparent; color: var(--text); border-color: #b65cff66; }
+a.btn.small { padding: 7px 11px; font-size: 0.66rem; }
+.bull-link { background: none; border: 0; padding: 0; border-radius: 50%; display: inline-block; }
+.bull-link:hover { transform: none; box-shadow: none; }
+.bull-link:hover .bull-big { transform: scale(1.05) rotate(-2deg); filter: drop-shadow(0 0 34px rgba(57, 255, 106, 0.6)); }
+:focus-visible { outline: 2px solid var(--violet); outline-offset: 3px; }
 form .row > * { flex: 1; }
 
 .addr { font-family: var(--mono); font-size: 0.8rem; background: #09070b; border: 1px solid var(--line); border-radius: var(--radius); padding: 9px 11px; word-break: break-all; color: var(--volt); }
