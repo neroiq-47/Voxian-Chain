@@ -87,7 +87,8 @@ const views = {};
 views.overview = {
   render: () => `
     <section class="hero">
-      <h1>Privacy meets the <span>autonomous economy</span>.</h1>
+      <div class="eyebrow">Live devnet · ${mode === 'browser' ? 'running in your browser' : 'full node'}</div>
+      <h1>Privacy meets the <span>autonomous economy.</span></h1>
       <p>Voxian is a Layer 1 blockchain combining zero-knowledge technology with x402 payments, so people, apps and AI agents can pay for
       digital services privately, securely and automatically. This is a live devnet. Every block, proof and payment below is real and runs ${mode === 'browser' ? 'in your browser' : 'on this node'}.</p>
       <div class="pills"><span class="pill">🌐 Built for AI agents, APIs &amp; services</span><span class="pill">🔐 ZK confidential notes</span><span class="pill">⚡ x402 programmable payments</span><span class="pill">⛓️ Independent Layer 1</span></div>
