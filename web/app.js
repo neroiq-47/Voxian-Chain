@@ -261,7 +261,7 @@ views.market = {
     </div>`,
   async update() {
     const [rev, a] = await Promise.all([api.revenue(), api.account(wallet.address), scanMyNotes()]);
-    $('#m-revenue').innerHTML = `<div class="kv"><div>Public (exact)</div><div>${vox(rev.publicRevenue)}</div><div>🔐 Shielded</div><div>${vox(rev.shieldedRevenue)} · ${rev.shieldedPayments} payments</div></div>`;
+    $('#m-revenue').innerHTML = `<div class="kv"><div>Public (exact)</div><div>${vox(rev.publicRevenue)}</div><div>🔐 Shielded</div><div>${rev.shieldedRevenue == null ? '<span class="muted">hidden (operator token required)</span>' : vox(rev.shieldedRevenue) + ' · ' + rev.shieldedPayments + ' payments'}</div></div>`;
     $('#m-wallet').innerHTML = `<div>Public</div><div>${vox(a.pendingBalance)}</div><div>Shielded</div><div>${vox(shieldedBalance())}</div>`;
     if (!catalog) {
       catalog = await api.services();

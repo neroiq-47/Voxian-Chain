@@ -13,7 +13,7 @@ export function bytesToHex(bytes) {
 }
 
 export function hexToBytes(hex) {
-  if (typeof hex !== 'string' || hex.length % 2 !== 0 || !/^[0-9a-f]*$/i.test(hex)) {
+  if (typeof hex !== 'string' || hex.length % 2 !== 0 || !/^[0-9a-f]*$/.test(hex)) {
     throw new Error('invalid hex');
   }
   const out = new Uint8Array(hex.length / 2);
@@ -53,12 +53,6 @@ export function randomBytes(n) {
   return b;
 }
 
-export function equalBytes(a, b) {
-  if (a.length !== b.length) return false;
-  let d = 0;
-  for (let i = 0; i < a.length; i++) d |= a[i] ^ b[i];
-  return d === 0;
-}
 
 // Deterministic JSON: sorted keys, no undefined, no non-finite numbers.
 export function canonicalJSON(value) {

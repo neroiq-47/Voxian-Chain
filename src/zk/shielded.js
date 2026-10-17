@@ -33,7 +33,8 @@ const blindFrom = (shared) => hashToScalar('Voxian/blind', scalarToBytes(shared)
 const maskFrom = (shared) => bytesToBig(taggedHash('Voxian/amount', scalarToBytes(shared)).subarray(0, 8));
 
 // Create a confidential output paying `value` (bigint, base units) to a z-address.
-export function createOutput(zaddress, value, { withRangeProof = true, txSecret = randomScalar() } = {}) {
+export function createOutput(zaddress, value, { withRangeProof = true } = {}) {
+  const txSecret = randomScalar();
   const { A, B } = parseZAddress(zaddress);
   const R = mulG(txSecret);
   const shared = sharedFrom(A.mul(txSecret));

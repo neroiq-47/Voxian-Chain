@@ -8,7 +8,9 @@ import { DEFAULT_DEVNET_SECRET } from '../chain/keys.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const PORT = Number(process.env.PORT) || 8402;
-const HOST = process.env.HOST || '0.0.0.0';
+// Loopback by default: exposing the node on the network is an explicit choice (HOST=0.0.0.0) and needs a private secret.
+const HOST = process.env.HOST || '127.0.0.1';
+const LOOPBACK = new Set(['127.0.0.1', 'localhost', '::1']);
 const DATA_DIR = path.resolve(process.env.VOXIAN_DATA_DIR || path.join(ROOT, 'data'));
 const MAX_BODY = 1_000_000;
 const MAX_P2P_BODY = 16_000_000; // proposals/commits can carry up to MAX_BLOCK_TXS shielded txs
@@ -20,11 +22,25 @@ export class FileStorage {
   async load() {
     if (process.env.VOXIAN_RESET === '1') await this.clear();
     if (!fs.existsSync(this.file)) return [];
-    return fs.readFileSync(this.file, 'utf8').split('\n').filter(Boolean).flatMap((l) => { try { return [JSON.parse(l)]; } catch { return []; } });
+    const text = fs.readFileSync(this.file, 'utf8');
+    // A crash mid-append can leave a partial last record. Cut it off so the next append starts on a fresh line
+    // instead of being glued onto the fragment (which would silently lose that block on the following restart).
+    const complete = text.endsWith('\n') ? text : text.slice(0, text.lastIndexOf('\n') + 1);
+    if (complete !== text) {
+      fs.writeFileSync(this.file, complete);
+      console.warn(`[storage] dropped a partial trailing record in ${this.file}`);
+    }
+    return complete.split('\n').filter(Boolean).flatMap((l) => { try { return [JSON.parse(l)]; } catch { return []; } });
   }
   async append(block) {
     fs.mkdirSync(this.dir, { recursive: true });
-    await fs.promises.appendFile(this.file, JSON.stringify(block) + '\n');
+    const fh = await fs.promises.open(this.file, 'a');
+    try {
+      await fh.appendFile(JSON.stringify(block) + '\n');
+      await fh.sync();
+    } finally {
+      await fh.close();
+    }
   }
   async replaceAll(blocks) {
     fs.mkdirSync(this.dir, { recursive: true });
@@ -69,10 +85,19 @@ function serveStatic(urlPath, res) {
 function readBody(req, limit) {
   return new Promise((resolve, reject) => {
     let size = 0;
+    let tooLarge = false;
     const chunks = [];
-    req.on('data', (c) => { size += c.length; if (size > limit) { reject(Object.assign(new Error('body too large'), { status: 413 })); req.destroy(); } else chunks.push(c); });
-    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
-    req.on('error', reject);
+    req.on('data', (c) => {
+      size += c.length;
+      if (size > limit && !tooLarge) {
+        // Reject now, but keep reading (and discarding) so the 413 reaches the client before the socket closes.
+        tooLarge = true;
+        reject(Object.assign(new Error('body too large'), { status: 413 }));
+      } else if (!tooLarge) chunks.push(c);
+      if (size > limit * 4) req.destroy(); // hard stop for senders that ignore the 413
+    });
+    req.on('end', () => { if (!tooLarge) resolve(Buffer.concat(chunks).toString('utf8')); });
+    req.on('error', (e) => { if (!tooLarge) reject(e); });
   });
 }
 
@@ -90,6 +115,9 @@ export async function startServer({
   secret = process.env.VOXIAN_DEVNET_SECRET || DEFAULT_DEVNET_SECRET,
   validators = process.env.VOXIAN_VALIDATORS || 'all', validatorSeed = process.env.VOXIAN_VALIDATOR_SEED, peers = envList(process.env.VOXIAN_PEERS), name = process.env.VOXIAN_NODE_NAME || '', quiet = false,
 } = {}) {
+  if (secret === DEFAULT_DEVNET_SECRET && !LOOPBACK.has(host)) {
+    throw new Error('refusing to listen on a public interface with the public devnet secret; set VOXIAN_DEVNET_SECRET first');
+  }
   const fileStorage = storage ? null : new FileStorage(dataDir);
   const log = quiet ? () => {} : (m) => console.log(`[${name || 'voxian'}] ${m}`);
   // Bind the file storage to this genesis before the consensus engine reads its signing log.
@@ -122,7 +150,7 @@ export async function startServer({
       const raw = req.method === 'POST' ? await readBody(req, url.pathname.startsWith('/p2p/') ? MAX_P2P_BODY : MAX_BODY) : '';
       if (raw) body = JSON.parse(raw);
     } catch (e) {
-      res.writeHead(e.status || 400, { 'content-type': 'application/json', ...CORS }).end(JSON.stringify({ error: e.status ? e.message : 'invalid JSON body' }));
+      res.writeHead(e.status || 400, { 'content-type': 'application/json', ...(e.status === 413 ? { connection: 'close' } : {}), ...CORS }).end(JSON.stringify({ error: e.status ? e.message : 'invalid JSON body' }));
       return;
     }
     const out = await node.handle({ method: req.method, path: url.pathname, query: Object.fromEntries(url.searchParams), headers: req.headers, body });

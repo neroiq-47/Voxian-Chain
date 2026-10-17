@@ -76,7 +76,9 @@ export function parseVox(str) {
   const s = String(str).trim();
   if (!/^\d{1,9}(\.\d{1,8})?$/.test(s)) throw new Error(`invalid VOX amount "${str}" (max 8 decimals)`);
   const [whole, frac = ''] = s.split('.');
-  return BigInt(whole) * UNIT + BigInt(frac.padEnd(DECIMALS, '0'));
+  const units = BigInt(whole) * UNIT + BigInt(frac.padEnd(DECIMALS, '0'));
+  if (units > MAX_SUPPLY) throw new Error(`VOX amount "${str}" exceeds the max supply`);
+  return units;
 }
 
 export function formatVox(units, { trim = true } = {}) {

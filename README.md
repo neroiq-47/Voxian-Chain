@@ -29,7 +29,8 @@ npm run build:pages  # static build in dist/ (the app boots an in-browser node w
 ```
 
 Environment variables:
-- `PORT` (default 8402), `HOST`, `VOXIAN_DATA_DIR` (default `./data`), `VOXIAN_RESET=1` to wipe the chain.
+- `PORT` (default 8402), `HOST` (default `127.0.0.1`; `0.0.0.0` exposes the node and requires `VOXIAN_DEVNET_SECRET`), `VOXIAN_DATA_DIR` (default `./data`), `VOXIAN_RESET=1` to wipe the chain.
+- `VOXIAN_OPERATOR_TOKEN`: bearer token for `GET /api/services/revenue` shielded totals. Unset means shielded revenue is never shown.
 - `VOXIAN_DEVNET_SECRET` derives the validator, faucet and facilitator keys.
 - `VOXIAN_VALIDATORS`: `all` (standalone, the default), `none` (observer/RPC node), or names such as `aurora,borealis`.
 - `VOXIAN_VALIDATOR_SEED`: a 64-hex wallet seed. The node also runs that key as a validator, so a validator registered on-chain with `validator_register` (for example from the web wallet) can propose and vote. Use *Wallet → Show seed* to get it.
