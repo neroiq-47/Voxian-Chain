@@ -149,5 +149,17 @@ Paid routes: `/paid/oracle/price`, `/paid/ai/sentiment`, `/paid/ai/summarize`, `
 4. Complete independent security reviews
 5. Only then assess mainnet readiness
 
+## Support Voxian ❤️
+Voxian is built in the open and funded by its community through **[GitHub Sponsors](https://github.com/sponsors/neroiq-47)**. Any amount helps, and small monthly sponsorships are the most useful.
+
+Sponsorship pays for:
+1. Independent security reviews (the white paper's step before any mainnet decision).
+2. Testnet infrastructure.
+3. Development time.
+
+GitHub Sponsors charges no platform fees for personal accounts, so the full amount reaches the project.
+
+> Sponsorship is a donation to the project's development. It is not an investment, and it does not buy, reserve or promise any VOX tokens. VOX is a proposed token and the devnet tokens have no value.
+
 ## License
 MIT
