@@ -23,9 +23,8 @@ const FAUCET_GLOBAL_PER_MIN = 20; // new addresses are free, so also cap total f
 const ok = (body, headers = {}) => ({ status: 200, headers, body });
 const err = (status, message, extra = {}) => ({ status, headers: {}, body: { error: message, ...extra } });
 
-// Operator access to shielded totals: a bearer token from VOXIAN_OPERATOR_TOKEN. Unset means no shielded view at all.
-function operatorAuthorized(req) {
-  const want = process.env.VOXIAN_OPERATOR_TOKEN;
+// Operator access to shielded totals: a bearer token (the node's VOXIAN_OPERATOR_TOKEN). Unset means no shielded view at all.
+function operatorAuthorized(req, want) {
   const got = String(req.headers?.authorization ?? '').replace(/^Bearer /, '');
   if (!want || got.length !== want.length) return false;
   let diff = 0; // constant-time comparison; the router also runs in the browser, so no node:crypto here
@@ -56,7 +55,7 @@ function summarizeTx(tx, hash, extra = {}) {
 const blockSummary = (b) => ({ height: b.height, slot: b.slot, hash: b.hash, timestamp: b.timestamp, proposer: b.proposer, txCount: b.txs.length, reward: b.reward, fees: b.fees, pohTicks: b.pohTicks, round: b.commit?.round ?? 0, signers: b.commit?.votes.length ?? 0 });
 const bpsPct = (x, total) => (total > 0n ? Number((x * 10000n) / total) / 100 : 0);
 
-export function createRouter({ chain, consensus, facilitator, services, payee, keys }) {
+export function createRouter({ chain, consensus, facilitator, services, payee, keys, operatorToken }) {
   const faucetLast = new Map();
   let faucetWindow = [];
   // The public facilitator endpoints only settle payments for this node's own services (otherwise anyone
@@ -173,7 +172,7 @@ export function createRouter({ chain, consensus, facilitator, services, payee, k
     // The service operator's view: public revenue is visible to all; shielded revenue only with the operator token.
     ['GET', /^\/api\/services\/revenue$/, (req) => {
       const publicRevenue = chain.state.account(payee.address).balance.toString();
-      if (!operatorAuthorized(req)) return ok({ publicRevenue, shieldedRevenue: null, shieldedPayments: null });
+      if (!operatorAuthorized(req, operatorToken)) return ok({ publicRevenue, shieldedRevenue: null, shieldedPayments: null });
       let priv = 0n, count = 0;
       for (const n of chain.state.notes.values()) {
         const r = scanOutput(payee.shielded, n);

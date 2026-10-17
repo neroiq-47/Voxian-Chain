@@ -27,7 +27,7 @@ export function selectValidators(keys, validators = 'all') {
   });
 }
 
-export function createNode({ storage = new MemoryStorage(), secret = DEFAULT_DEVNET_SECRET, validators = 'all', validatorSeed, peers = [], selfUrl = null, transport, now, log = () => {} } = {}) {
+export function createNode({ storage = new MemoryStorage(), secret = DEFAULT_DEVNET_SECRET, validators = 'all', validatorSeed, peers = [], selfUrl = null, transport, now, operatorToken, log = () => {} } = {}) {
   const keys = devnetKeys(secret);
   const chain = new Blockchain({ keys, storage, now });
   const net = transport ?? (peers.length ? new HttpTransport(peers, { self: selfUrl }) : null);
@@ -38,7 +38,7 @@ export function createNode({ storage = new MemoryStorage(), secret = DEFAULT_DEV
   const services = createServices(chain);
   const shielded = deriveShieldedKeys(keys.serviceSeed);
   const payee = { address: keys.service.address, zaddress: shielded.zaddress, shielded };
-  const handle = createRouter({ chain, consensus, facilitator, services, payee, keys });
+  const handle = createRouter({ chain, consensus, facilitator, services, payee, keys, operatorToken });
   return {
     chain, consensus, facilitator, services, payee, keys, handle,
     init: () => chain.init(),

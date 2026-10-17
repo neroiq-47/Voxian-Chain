@@ -112,7 +112,7 @@ const envList = (v) => (v ? v.split(',').map((s) => s.trim()).filter(Boolean) : 
 
 export async function startServer({
   port = PORT, host = HOST, storage, dataDir = process.env.VOXIAN_DATA_DIR ? path.resolve(process.env.VOXIAN_DATA_DIR) : DATA_DIR,
-  secret = process.env.VOXIAN_DEVNET_SECRET || DEFAULT_DEVNET_SECRET,
+  secret = process.env.VOXIAN_DEVNET_SECRET || DEFAULT_DEVNET_SECRET, operatorToken = process.env.VOXIAN_OPERATOR_TOKEN,
   validators = process.env.VOXIAN_VALIDATORS || 'all', validatorSeed = process.env.VOXIAN_VALIDATOR_SEED, peers = envList(process.env.VOXIAN_PEERS), name = process.env.VOXIAN_NODE_NAME || '', quiet = false,
 } = {}) {
   if (secret === DEFAULT_DEVNET_SECRET && !LOOPBACK.has(host)) {
@@ -126,7 +126,7 @@ export async function startServer({
     fileStorage.bind(makeGenesis(devnetKeys(secret)).hash);
   }
   const selfUrl = process.env.VOXIAN_PUBLIC_URL || (peers.length ? `http://127.0.0.1:${port}` : null);
-  const node = createNode({ storage: storage ?? fileStorage, secret, validators, validatorSeed, peers, selfUrl, log });
+  const node = createNode({ storage: storage ?? fileStorage, secret, validators, validatorSeed, peers, selfUrl, operatorToken, log });
   await node.init();
   node.start();
 

@@ -12,8 +12,7 @@ import { UNIT } from '../src/chain/params.js';
 const until = async (cond) => { for (let i = 0; i < 80; i++) { if (await cond()) return; await new Promise((r) => setTimeout(r, 100)); } throw new Error('timeout'); };
 
 test('x402 end to end over HTTP: 402 challenge, exact + zk-shielded payments, agent', async (t) => {
-  process.env.VOXIAN_OPERATOR_TOKEN = 'op-test-token';
-  const s = await startServer({ port: 0, host: '127.0.0.1', storage: new MemoryStorage(), secret: 'x402-test', quiet: true });
+  const s = await startServer({ port: 0, host: '127.0.0.1', storage: new MemoryStorage(), secret: 'x402-test', operatorToken: 'op-test-token', quiet: true });
   t.after(() => s.close());
   const base = `http://127.0.0.1:${s.server.address().port}/`;
   const f = (u, i) => fetch(new URL(u, base), i);
