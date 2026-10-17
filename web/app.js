@@ -159,8 +159,8 @@ views.wallet = {
       <div class="card"><h3>Devnet faucet</h3><p class="small muted">Get 1,000 test VOX (30s cooldown).</p><button id="btn-faucet" class="volt">⚡ Request 1,000 VOX</button></div>
     </div>
     <div class="grid g2 section">
-      <div class="card"><h3>Public address</h3><div class="addr copy" data-copy="${esc(wallet.address)}" title="click to copy">${esc(wallet.address)}</div>
-        <h3 style="margin-top:14px">Shielded z-address</h3><div class="addr copy small" data-copy="${esc(wallet.zaddress)}" title="click to copy">${esc(wallet.zaddress)}</div>
+      <div class="card"><h3>Public address</h3><div class="addr copy" tabindex="0" role="button" data-copy="${esc(wallet.address)}" title="click to copy">${esc(wallet.address)}</div>
+        <h3 style="margin-top:14px">Shielded z-address</h3><div class="addr copy small" tabindex="0" role="button" data-copy="${esc(wallet.zaddress)}" title="click to copy">${esc(wallet.zaddress)}</div>
         <div class="row" style="margin-top:12px"><button class="ghost small" id="btn-new">New wallet</button><button class="ghost small" id="btn-export">Show seed</button><button class="ghost small" id="btn-import">Import seed</button></div>
         <div id="seed-box"></div></div>
       <div class="card"><h3>Send VOX (public)</h3>
@@ -190,7 +190,7 @@ views.wallet = {
     $('#w-shielded-sub').textContent = `${unspent.length} unspent note${unspent.length === 1 ? '' : 's'}`;
     $('#w-activity').innerHTML = a.txs.length ? `<table><tr><th>Type</th><th>Amount</th><th>Counterparty</th><th></th></tr>${a.txs.map((t) => {
       const out = t.from === wallet.address;
-      return `<tr class="click" data-go="#explorer/${t.hash}"><td>${typeTag(t)}</td><td class="${out ? 'bad' : 'ok'}">${out ? '−' : '+'}${vox(t.amount)}</td><td>${addrLink(out ? t.to : t.from)}</td><td class="muted small">${t.pending ? '' : '#' + t.height}</td></tr>`;
+      return `<tr class="click" data-go="#explorer/${esc(t.hash)}"><td>${typeTag(t)}</td><td class="${out ? 'bad' : 'ok'}">${out ? '−' : '+'}${vox(t.amount)}</td><td>${addrLink(out ? t.to : t.from)}</td><td class="muted small">${t.pending ? '' : '#' + t.height}</td></tr>`;
     }).join('')}</table>` : '<p class="muted small">No activity yet. Request VOX from the faucet to start.</p>';
     $('#w-notes').innerHTML = myNotes.length ? `<table><tr><th>Note</th><th>Value</th><th>Status</th></tr>${[...myNotes].reverse().map((n) => `
       <tr><td class="mono">${esc(short(n.id, 10, 4))}</td><td>${vox(n.value)}</td><td>${n.spent ? '<span class="muted">spent</span>' : n.confirmed ? '<span class="ok">unspent</span>' : '<span class="tag pending">pending</span>'}</td></tr>`).join('')}</table>` : '<p class="muted small">No notes yet. Shield some VOX.</p>';
@@ -198,7 +198,7 @@ views.wallet = {
   bind() {
     $('#btn-faucet').onclick = (e) => busy(e.target, 'Requesting…', async () => { const r = await api.faucet(wallet.address); toast(`Faucet sent ${r.formatted} VOX · tx ${short(r.hash)}`, 'success'); refresh(); });
     $('#btn-new').onclick = () => { if (confirm('Create a new wallet? Save your current seed first if you want to keep it.')) { setWallet(Wallet.generate()); route(true); } };
-    $('#btn-export').onclick = () => { $('#seed-box').innerHTML = `<label>Seed (keep secret, devnet only)</label><div class="addr copy" data-copy="${esc(wallet.seedHex)}">${esc(wallet.seedHex)}</div>`; };
+    $('#btn-export').onclick = () => { $('#seed-box').innerHTML = `<label>Seed (keep secret, devnet only)</label><div class="addr copy" tabindex="0" role="button" data-copy="${esc(wallet.seedHex)}">${esc(wallet.seedHex)}</div>`; };
     $('#btn-import').onclick = () => {
       const s = prompt('Paste a 64-hex-character wallet seed:');
       if (!s) return;
@@ -546,7 +546,7 @@ views.explorer = {
 };
 
 const txTable = (txs) => `<table><tr><th>Tx</th><th>Type</th><th>From → To</th><th>Amount</th></tr>${txs.map((t) => `
-  <tr class="click" data-go="#explorer/${t.hash}"><td class="mono">${esc(short(t.hash, 8, 4))}</td><td>${typeTag(t)}</td><td class="small">${addrLink(t.from)} → ${addrLink(t.to)}</td><td>${t.amount ? vox(t.amount) : t.private ? '<span class="violet">hidden</span>' : '<span class="muted">—</span>'}</td></tr>`).join('')}</table>`;
+  <tr class="click" data-go="#explorer/${esc(t.hash)}"><td class="mono">${esc(short(t.hash, 8, 4))}</td><td>${typeTag(t)}</td><td class="small">${addrLink(t.from)} → ${addrLink(t.to)}</td><td>${t.amount ? vox(t.amount) : t.private ? '<span class="violet">hidden</span>' : '<span class="muted">—</span>'}</td></tr>`).join('')}</table>`;
 
 async function showExplorerItem(q) {
   const box = $('#x-result');
@@ -596,9 +596,9 @@ const TIERS = [
   ['☕', 'Supporter', '$5', 'Sponsor badge, thanks in the monthly update'],
   ['🛠', 'Builder', '$25', 'Name in the README, monthly progress update'],
   ['🤖', 'Agent Pioneer', '$100', 'Priority issue triage, early testnet news'],
-  ['⛓️', 'Validator Partner', '$500', 'Logo in the README and web app, quarterly roadmap call'],
+  ['⛓️', 'Validator Partner', '$500', 'Logo in the README and web app (planned), quarterly roadmap call'],
   ['🏢', 'Enterprise', '$2,500', '2 h/month of x402 & shielded-payment integration support'],
-  ['🏛', 'Enterprise Partner', '$10,000', 'Top logo placement, 8 h/month of support, named funder of the security review'],
+  ['🏛', 'Enterprise Partner', '$10,000', 'Top logo placement (planned), 8 h/month of support, named funder of the security review'],
 ];
 views.donate = {
   render: () => `
@@ -685,6 +685,7 @@ async function copyText(text, el) {
     await navigator.clipboard.writeText(text);
     toast('Copied', 'success');
   } catch {
+    if (!el) return window.prompt('Copy this text', text);
     selectText(el);
     let ok = false;
     try { ok = el ? document.execCommand('copy') : false; } catch { /* unsupported */ }

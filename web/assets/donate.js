@@ -74,8 +74,13 @@
   // Parse a user-typed amount without floating-point surprises. Returns { value: Number, text } or { error }.
   function parseAmount(raw, method) {
     var m = METHODS[method];
-    var s = String(raw || '').trim().replace(/[$,\s]/g, '');
+    var s = String(raw || '').trim().replace(/[$\s]/g, '');
     if (!s) return { error: 'Choose or enter an amount.' };
+    // Commas are accepted only as thousands separators; "0,5" must not be read as 5.
+    if (s.indexOf(',') !== -1) {
+      if (!/^\d{1,3}(,\d{3})+(\.\d*)?$/.test(s)) return { error: 'Use a dot for decimals, like 0.5. Commas are only for thousands, like 1,000.' };
+      s = s.replace(/,/g, '');
+    }
     if (!/^(\d+\.?\d*|\.\d+)$/.test(s)) return { error: 'Enter a number, like 25 or 0.5.' };
     if (s.charAt(0) === '.') s = '0' + s;
     if (s.charAt(s.length - 1) === '.') s = s.slice(0, -1); // "5." while typing means 5
@@ -134,7 +139,13 @@
       if (el) { var r = document.createRange(); r.selectNodeContents(el); var s = window.getSelection(); s.removeAllRanges(); s.addRange(r); }
       var ok = false;
       try { ok = el ? document.execCommand('copy') : false; } catch (e) { ok = false; }
-      done(ok ? 'Copied' : 'Selected: press Ctrl+C / ⌘C to copy');
+      if (ok) return done('Copied');
+      if (!el) {
+        // Nothing on the page to select: let the donor copy the text from a prompt.
+        window.prompt('Copy this text', text);
+        return done('');
+      }
+      done('Selected: press Ctrl+C / ⌘C to copy');
     }
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { done('Copied'); }, fallback);
     else fallback();
@@ -158,7 +169,7 @@
     // so typing never loses focus and assistive tech isn't flooded with re-inserted regions.
     function summaryHtml(c) {
       var m = c.m, parsed = c.parsed;
-      var tier = c.valid && state.method !== 'sol' ? tierFor(parsed.value) : null;
+      var tier = c.valid && state.method === 'github' && state.frequency === 'monthly' ? tierFor(parsed.value) : null;
       var html = '';
       if (c.valid) {
         html += '<div class="vd-total">' + esc(c.isCrypto ? Number(parsed.text).toLocaleString('en-US', { maximumFractionDigits: m.decimals }) : fmt(parsed.value, 'github')) + '<small>' + m.unit + (state.method === 'github' && state.frequency === 'monthly' ? ' / month' : '') + '</small></div>' +

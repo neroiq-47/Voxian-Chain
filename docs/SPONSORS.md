@@ -11,9 +11,9 @@ Voxian is funded through **[GitHub Sponsors](https://github.com/sponsors/neroiq-
 | ☕ **Supporter** | $5 | Anyone who likes the project | Sponsor badge on your GitHub profile · thanks in the monthly update |
 | 🛠 **Builder** | $25 | Developers building on Voxian | Everything above · name in the README sponsor list · monthly progress update |
 | 🤖 **Agent Pioneer** | $100 | Indie teams and AI-agent builders | Everything above · priority triage of your issues · early access to testnet announcements |
-| ⛓️ **Validator Partner** | $500 | Startups and infrastructure operators | Everything above · small logo in the README and the web app's "Backed by" strip · quarterly roadmap call |
+| ⛓️ **Validator Partner** | $500 | Startups and infrastructure operators | Everything above · small logo in the README and web app (planned) · quarterly roadmap call |
 | 🏢 **Enterprise** | $2,500 | Companies evaluating private payments and x402 | Everything above · medium logo · 2 hours a month of integration support (x402 facilitator, shielded payments, agent payments) · early access to security-review summaries |
-| 🏛 **Enterprise Partner** | $10,000 | Organisations backing the security-review and testnet milestones | Everything above · large logo at the top of the README and web app · 8 hours a month of integration and architecture support · named credit as a funder of the independent security review · a non-binding seat at a quarterly roadmap review |
+| 🏛 **Enterprise Partner** | $10,000 | Organisations backing the security-review and testnet milestones | Everything above · large logo at the top of the README and web app (planned) · 8 hours a month of integration and architecture support · named credit as a funder of the independent security review · a non-binding seat at a quarterly roadmap review |
 
 **One-time sponsorships** of any amount are welcome too. Enable "custom amounts" in the dashboard so people can give exactly what fits their budget.
 

@@ -35,6 +35,8 @@ Environment variables:
 - `VOXIAN_VALIDATOR_SEED`: a 64-hex wallet seed. The node also runs that key as a validator, so a validator registered on-chain with `validator_register` (for example from the web wallet) can propose and vote. Use *Wallet → Show seed* to get it.
 - `VOXIAN_PEERS`: comma-separated peer node URLs.
 - `VOXIAN_NODE_NAME`: a log label.
+- `VOXIAN_PUBLIC_URL`: the URL other peers use to reach this node (defaults to `http://127.0.0.1:<PORT>` when peers are set).
+- `VOXIAN_NODE`: the node URL `npm run agent` talks to (default `http://localhost:8402`).
 
 ## What's inside
 
@@ -157,9 +159,9 @@ Voxian is built in the open and funded through **[GitHub Sponsors](https://githu
 | ☕ Supporter | $5 | Sponsor badge, thanks in the monthly update |
 | 🛠 Builder | $25 | Name in the README, monthly progress update |
 | 🤖 Agent Pioneer | $100 | Priority issue triage, early testnet news |
-| ⛓️ Validator Partner | $500 | Logo in the README and web app, quarterly roadmap call |
+| ⛓️ Validator Partner | $500 | Logo in the README and web app (planned), quarterly roadmap call |
 | 🏢 Enterprise | $2,500 | 2 h a month of x402 / shielded-payment integration support |
-| 🏛 Enterprise Partner | $10,000 | Top logo placement, 8 h a month of support, named funder of the security review |
+| 🏛 Enterprise Partner | $10,000 | Top logo placement (planned), 8 h a month of support, named funder of the security review |
 
 One-time gifts of any amount are welcome too. See [docs/SPONSORS.md](docs/SPONSORS.md) for the full tier details.
 
