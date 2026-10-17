@@ -139,7 +139,7 @@ Consensus: `GET /api/consensus` (round, slot, epoch, lock, last commit, peers) �
 Paid routes: `/paid/oracle/price`, `/paid/ai/sentiment`, `/paid/ai/summarize`, `/paid/data/chain-insights`, `/paid/random`
 
 ## Deploying the demo
-- **GitHub Pages (no server):** enable *Settings → Pages → Source: GitHub Actions*. Pushing to `main` then runs `.github/workflows/pages.yml`. Every visitor gets their own in-browser devnet, saved in localStorage.
+- **GitHub Pages (no server):** enable *Settings → Pages → Source: GitHub Actions*. Pushing to `main` then runs `.github/workflows/pages.yml`. The site serves the landing page (`site/`) at `/` and the demo app at `/app/`, where every visitor gets their own in-browser devnet, saved in localStorage.
 - **Full node:** any Node 20+ host. Run `npm start` and expose the port. The web app detects the backend automatically.
 
 ## Roadmap (from the white paper)
