@@ -1,3 +1,5 @@
 # Shows the "Sponsor" button on the repository page.
 # https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/displaying-a-sponsor-button-in-your-repository
 github: [neroiq-47]
+# GitHub only accepts URLs here, so the Solana donation address is linked via the sponsors page.
+custom: ["https://github.com/neroiq-47/Voxian-Chain/blob/main/docs/SPONSORS.md#donate-with-crypto-solana"]

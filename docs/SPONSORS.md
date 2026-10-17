@@ -19,6 +19,17 @@ Voxian is funded through **[GitHub Sponsors](https://github.com/sponsors/neroiq-
 
 Organisations can sponsor from a GitHub organisation account, and can pay by invoice through GitHub where eligible.
 
+## Donate with crypto (Solana)
+You can also donate SOL or SPL tokens (e.g. USDC) directly to the project wallet:
+
+```
+5g4xQALSN81J1EseRkkb4GGWJiLAJCPRnoqUeB5jYWkk
+```
+
+- **Network: Solana mainnet only.** Sending from another chain (Ethereum, BNB Chain and so on) will lose the funds.
+- Double-check the address after pasting it. Crypto transfers can't be reversed.
+- Crypto donations are gifts like any other sponsorship: no VOX, equity or returns are given in exchange. To be listed at a tier level, open an issue with your transaction signature.
+
 ## What the money pays for (in order)
 1. **Independent security reviews** of the cryptography (range proofs, stealth addresses, signatures) and of consensus (PoH, BFT, slashing). The white paper requires these before any mainnet decision.
 2. **Public testnet infrastructure:** validator and seed nodes, the faucet, an explorer, and hosting for the in-browser demo.

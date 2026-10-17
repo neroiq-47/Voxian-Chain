@@ -163,6 +163,8 @@ Voxian is built in the open and funded through **[GitHub Sponsors](https://githu
 
 One-time gifts of any amount are welcome too. See [docs/SPONSORS.md](docs/SPONSORS.md) for the full tier details.
 
+**Donate with crypto (Solana mainnet only):** `5g4xQALSN81J1EseRkkb4GGWJiLAJCPRnoqUeB5jYWkk`
+
 Funding pays for:
 1. Independent security reviews (the white paper's step before any mainnet decision).
 2. Testnet infrastructure.
