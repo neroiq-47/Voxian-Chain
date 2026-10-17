@@ -590,6 +590,36 @@ async function showExplorerItem(q) {
 }
 
 // ---------- about ----------
+// ---------- donate ----------
+const SPONSORS_URL = 'https://github.com/sponsors/neroiq-47';
+const SOLANA_ADDRESS = '5g4xQALSN81J1EseRkkb4GGWJiLAJCPRnoqUeB5jYWkk';
+const TIERS = [
+  ['☕', 'Supporter', '$5', 'Sponsor badge, thanks in the monthly update'],
+  ['🛠', 'Builder', '$25', 'Name in the README, monthly progress update'],
+  ['🤖', 'Agent Pioneer', '$100', 'Priority issue triage, early testnet news'],
+  ['⛓️', 'Validator Partner', '$500', 'Logo in the README and web app, quarterly roadmap call'],
+  ['🏢', 'Enterprise', '$2,500', '2 h/month of x402 & shielded-payment integration support'],
+  ['🏛', 'Enterprise Partner', '$10,000', 'Top logo placement, 8 h/month of support, named funder of the security review'],
+];
+views.donate = {
+  render: () => `
+    <section class="hero"><h1>Support <span>Voxian</span> ❤️</h1>
+      <p>Voxian is built in the open. Donations fund independent security reviews (the white paper's step before any mainnet decision), public testnet infrastructure and development time.</p></section>
+    <div class="grid g2 section">
+      <div class="card glow"><h3>GitHub Sponsors</h3>
+        <p class="small muted">Monthly or one-time, any amount. GitHub takes no fees on personal accounts, so it all reaches the project.</p>
+        <a href="${SPONSORS_URL}" target="_blank" rel="noopener"><button>❤️ Sponsor on GitHub</button></a></div>
+      <div class="card glow"><h3>Donate with crypto (Solana)</h3>
+        <p class="small muted">SOL or SPL tokens such as USDC. <b class="volt">Solana mainnet only.</b> Funds sent from another chain are lost, and transfers can't be reversed.</p>
+        <div class="addr copy" data-copy="${SOLANA_ADDRESS}" title="click to copy">${SOLANA_ADDRESS}</div>
+        <div class="row" style="margin-top:12px"><button class="ghost small" data-copy="${SOLANA_ADDRESS}">Copy address</button><a href="solana:${SOLANA_ADDRESS}"><button class="ghost small">Open in wallet</button></a></div></div>
+    </div>
+    <div class="card section"><h3>Sponsor tiers</h3><div class="table-wrap"><table><tr><th>Tier</th><th>Monthly</th><th>Benefits</th></tr>
+      ${TIERS.map(([icon, name, price, perks]) => `<tr><td>${icon} <b>${name}</b></td><td class="tier-price volt">${price}</td><td class="small">${perks}</td></tr>`).join('')}
+    </table></div><p class="small muted">Organisations can sponsor from a GitHub organisation account. Full details are in <a href="https://github.com/neroiq-47/Voxian-Chain/blob/main/docs/SPONSORS.md" target="_blank" rel="noopener">docs/SPONSORS.md</a>.</p></div>
+    <div class="card section notice">Donations are gifts to open-source development. They are not an investment, equity or a token sale, and they do not buy, reserve or promise any VOX. VOX is a proposed token and devnet tokens have no value.</div>`,
+};
+
 views.about = {
   render: () => `
     <section class="hero"><h1>About <span>Voxian</span></h1><p>Voxian is a proposed Layer 1 blockchain designed for private, verifiable digital payments in an increasingly automated world.</p></section>
