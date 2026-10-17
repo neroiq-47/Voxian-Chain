@@ -179,17 +179,7 @@ footer{border-top:1px solid #ffffff12;padding:25px 0;color:#817886;font-size:11p
         <div class="tier featured"><div class="name">🏢 Enterprise</div><div class="price">$2,500<small> / month</small></div><p>2 hours a month of x402 and shielded-payment integration support.</p></div>
         <div class="tier featured"><div class="name">🏛 Enterprise Partner</div><div class="price">$10,000<small> / month</small></div><p>Top logo placement, 8 hours a month of support, and credit as a funder of the security review.</p></div>
       </div>
-      <div class="donate" id="donate-options">
-        <div class="cta" style="flex-direction:column;align-items:flex-start">
-          <div><div class="kicker">GitHub Sponsors</div><h2>Sponsor monthly</h2><p>Any amount, monthly or one-time. GitHub takes no fees on personal accounts, so it all reaches the project.</p></div>
-          <a class="button primary" href="https://github.com/sponsors/neroiq-47" target="_blank" rel="noopener">❤ Sponsor on GitHub ↗</a>
-        </div>
-        <div class="cta" style="flex-direction:column;align-items:flex-start">
-          <div><div class="kicker">Crypto · Solana</div><h2>Donate SOL / USDC</h2><p class="warn">Solana mainnet only. Transfers can't be reversed.</p>
-            <div class="address" id="sol" tabindex="0" role="button" data-copy="5g4xQALSN81J1EseRkkb4GGWJiLAJCPRnoqUeB5jYWkk" aria-label="Solana donation address, press Enter to copy" title="click to copy">5g4xQALSN81J1EseRkkb4GGWJiLAJCPRnoqUeB5jYWkk</div></div>
-          <div class="actions" style="margin-top:0"><button class="button primary" type="button" data-copy="5g4xQALSN81J1EseRkkb4GGWJiLAJCPRnoqUeB5jYWkk" data-select="sol">Copy address</button><a class="button" href="solana:5g4xQALSN81J1EseRkkb4GGWJiLAJCPRnoqUeB5jYWkk">Open in wallet</a></div>
-        </div>
-      </div>
+      <div id="donate-options" data-donate-widget style="margin-top:13px"></div>
       <p class="disclaimer">Donations are gifts to open-source development. They are not an investment, equity or a token sale, and they do not buy, reserve or promise any VOX. Full details are in <a href="https://github.com/neroiq-47/Voxian-Chain/blob/main/docs/SPONSORS.md" target="_blank" rel="noopener" style="color:var(--purple)">docs/SPONSORS.md</a>.</p>
     </div>
   </section>
@@ -212,30 +202,7 @@ footer{border-top:1px solid #ffffff12;padding:25px 0;color:#817886;font-size:11p
     <div class="links"><a href="app/">DEMO</a><a href="https://github.com/sponsors/neroiq-47" target="_blank" rel="noopener">SPONSOR ↗</a><a href="https://github.com/neroiq-47/Voxian-Chain" target="_blank" rel="noopener">GITHUB ↗</a></div>
   </div>
 </footer>
-<div class="toast" id="toast" role="status" aria-live="polite">Address copied</div>
-<script>
-// Copy with fallbacks: async clipboard, then execCommand, then select the text for a manual copy.
-const toastEl = document.getElementById('toast');
-let toastTimer;
-function show(msg) { toastEl.textContent = msg; toastEl.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2400); }
-function selectText(el) { if (!el) return; const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
-async function copy(btn) {
-  const el = document.getElementById(btn.dataset.select) || (btn.classList.contains('address') ? btn : null);
-  try {
-    if (!navigator.clipboard) throw new Error('no clipboard');
-    await navigator.clipboard.writeText(btn.dataset.copy);
-    show('Address copied');
-  } catch {
-    selectText(el);
-    let ok = false;
-    try { ok = el ? document.execCommand('copy') : false; } catch { /* unsupported */ }
-    show(ok ? 'Address copied' : 'Address selected: press Ctrl+C / ⌘C');
-  }
-}
-document.addEventListener('click', (e) => { const b = e.target.closest('[data-copy]'); if (b) copy(b); });
-document.addEventListener('keydown', (e) => {
-  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.address[data-copy]')) { e.preventDefault(); copy(e.target); }
-});
-</script>
+<script src="assets/vendor/qrcode.js"></script>
+<script src="assets/donate.js"></script>
 </body>
 </html>

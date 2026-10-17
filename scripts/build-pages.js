@@ -16,5 +16,8 @@ fs.cpSync(path.join(root, 'src'), path.join(app, 'src'), {
   recursive: true,
   filter: (p) => !p.endsWith('server.js'), // Node-only entry point
 });
+// The donate widget (and its vendored QR encoder) is shared: the landing page loads it from /assets too.
+fs.cpSync(path.join(root, 'web', 'assets', 'donate.js'), path.join(out, 'assets', 'donate.js'));
+fs.cpSync(path.join(root, 'web', 'assets', 'vendor'), path.join(out, 'assets', 'vendor'), { recursive: true });
 fs.writeFileSync(path.join(out, '.nojekyll'), '');
 console.log(`built static site → ${path.relative(root, out)}/ (landing page) + ${path.relative(root, app)}/ (demo app)`);

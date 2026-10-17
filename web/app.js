@@ -592,8 +592,6 @@ async function showExplorerItem(q) {
 
 // ---------- about ----------
 // ---------- donate ----------
-const SPONSORS_URL = 'https://github.com/sponsors/neroiq-47';
-const SOLANA_ADDRESS = '5g4xQALSN81J1EseRkkb4GGWJiLAJCPRnoqUeB5jYWkk';
 const TIERS = [
   ['☕', 'Supporter', '$5', 'Sponsor badge, thanks in the monthly update'],
   ['🛠', 'Builder', '$25', 'Name in the README, monthly progress update'],
@@ -607,19 +605,13 @@ views.donate = {
     <section class="hero" style="text-align:center"><button type="button" class="bull-link" data-scroll="donate-options" aria-label="Show donation options"><img class="bull-big" src="assets/donate-bull-lg.png" alt="" width="168" height="168" /></button>
       <h1>Support <span>Voxian</span></h1>
       <p style="margin:0 auto">Voxian is built in the open. Donations fund independent security reviews (the white paper's step before any mainnet decision), public testnet infrastructure and development time.</p></section>
-    <div class="grid g2 section" id="donate-options">
-      <div class="card glow"><h3>GitHub Sponsors</h3>
-        <p class="small muted">Monthly or one-time, any amount. GitHub takes no fees on personal accounts, so it all reaches the project.</p>
-        <a class="btn" href="${SPONSORS_URL}" target="_blank" rel="noopener">❤️ Sponsor on GitHub ↗</a></div>
-      <div class="card glow"><h3>Donate with crypto (Solana)</h3>
-        <p class="small muted">SOL or SPL tokens such as USDC. <b class="volt">Solana mainnet only.</b> Funds sent from another chain are lost, and transfers can't be reversed.</p>
-        <div class="addr copy" id="sol-address" data-copy="${SOLANA_ADDRESS}" tabindex="0" role="button" aria-label="Solana donation address, press Enter to copy" title="click to copy">${SOLANA_ADDRESS}</div>
-        <div class="row" style="margin-top:12px"><button type="button" class="ghost small" data-copy="${SOLANA_ADDRESS}" data-select="sol-address">Copy address</button><a class="btn ghost small" href="solana:${SOLANA_ADDRESS}">Open in wallet</a></div></div>
-    </div>
+    <div class="section" id="donate-options" data-donate-widget></div>
     <div class="card section"><h3>Sponsor tiers</h3><div class="table-wrap"><table><tr><th>Tier</th><th>Monthly</th><th>Benefits</th></tr>
       ${TIERS.map(([icon, name, price, perks]) => `<tr><td>${icon} <b>${name}</b></td><td class="tier-price volt">${price}</td><td class="small">${perks}</td></tr>`).join('')}
     </table></div><p class="small muted">Organisations can sponsor from a GitHub organisation account. Full details are in <a href="https://github.com/neroiq-47/Voxian-Chain/blob/main/docs/SPONSORS.md" target="_blank" rel="noopener">docs/SPONSORS.md</a>.</p></div>
     <div class="card section notice">Donations are gifts to open-source development. They are not an investment, equity or a token sale, and they do not buy, reserve or promise any VOX. VOX is a proposed token and devnet tokens have no value.</div>`,
+  // The amount picker lives in assets/donate.js (shared with the landing page).
+  bind: () => window.VoxianDonate?.mount($('#donate-options')),
 };
 
 views.about = {
