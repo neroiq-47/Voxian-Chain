@@ -12,7 +12,7 @@ import { activeSet, enterEpoch, distributeReward, newValidator, voteDigest } fro
 export { voteDigest };
 import {
   CHAIN_ID, UNIT, MAX_SUPPLY, GENESIS_TIMESTAMP, MAX_BLOCK_TXS, MAX_MEMPOOL, MAX_PENDING_PER_SENDER, MAX_CLOCK_DRIFT_MS, blockReward,
-  TICKS_PER_SLOT, SLOTS_PER_EPOCH, LEADER_SLOTS, MAX_BLOCK_TICKS, MAX_SLOT_GAP, HEARTBEAT_SLOTS,
+  TICK_MS, TICKS_PER_SLOT, SLOTS_PER_EPOCH, LEADER_SLOTS, MAX_BLOCK_TICKS, MAX_SLOT_GAP, HEARTBEAT_SLOTS,
 } from './params.js';
 
 export const VALIDATOR_NAMES = ['vox-validator-aurora', 'vox-validator-borealis', 'vox-validator-cygnus', 'vox-validator-draco'];
@@ -97,6 +97,7 @@ export class Blockchain {
     this.blockListeners = new Set();
     this.txListeners = new Set();
     this.parentHashAt = (h) => this.blocks[h - 1]?.hash; // for evidence: votes at height h name block h-1
+    this.epochAt = (h) => (this.blocks[h] ? epochOf(this.blocks[h].slot) : null); // for evidence: the epoch whose weights covered height h
     this.reset();
   }
 
@@ -203,7 +204,7 @@ export class Blockchain {
     const sender = senderOf(tx);
     if (this.mempool.filter((m) => m.sender === sender).length >= MAX_PENDING_PER_SENDER) throw new Error('too many pending transactions from this sender');
     try {
-      applyTx(this.pending, tx, { height: this.height + 1, timestamp: this.now(), skipCrypto: this.verified.has(hash), admission: true, parentHashAt: this.parentHashAt });
+      applyTx(this.pending, tx, { height: this.height + 1, timestamp: this.now(), skipCrypto: this.verified.has(hash), admission: true, parentHashAt: this.parentHashAt, epochAt: this.epochAt });
     } catch (e) {
       if (e.crypto) this.rejected.add(hash);
       throw e;
@@ -219,7 +220,7 @@ export class Blockchain {
     enterEpoch(this.pending, epochOf(this.tip.slot + 1)); // stake released at the boundary is spendable now
     const keep = [];
     for (const m of this.mempool) {
-      try { applyTx(this.pending, m.tx, { height: this.height + 1, timestamp: this.now(), skipCrypto: true, parentHashAt: this.parentHashAt }); keep.push(m); }
+      try { applyTx(this.pending, m.tx, { height: this.height + 1, timestamp: this.now(), skipCrypto: true, parentHashAt: this.parentHashAt, epochAt: this.epochAt }); keep.push(m); }
       catch { this.verified.delete(m.hash); }
     }
     this.mempool = keep;
@@ -235,7 +236,7 @@ export class Blockchain {
     for (const tx of txs) {
       const hash = txHash(tx);
       try {
-        const r = applyTx(s, tx, { height: header.height, timestamp: header.timestamp, skipCrypto: trusted || this.verified.has(hash), parentHashAt: this.parentHashAt });
+        const r = applyTx(s, tx, { height: header.height, timestamp: header.timestamp, skipCrypto: trusted || this.verified.has(hash), parentHashAt: this.parentHashAt, epochAt: this.epochAt });
         fees += r.fee;
         included.push({ hash, tx });
       } catch (e) {
@@ -301,6 +302,8 @@ export class Blockchain {
     if (gap > MAX_SLOT_GAP) throw new Error(`slot skips more than ${MAX_SLOT_GAP} slots`);
     const minTicks = (gap - 1) * TICKS_PER_SLOT;
     if (!Number.isSafeInteger(block.pohTicks) || block.pohTicks < minTicks || block.pohTicks > MAX_BLOCK_TICKS) throw new Error(`PoH must prove ${minTicks}-${MAX_BLOCK_TICKS} ticks for this slot`);
+    // Hashing is fast, so PoH alone does not prove time passed: the skipped slots must also span real time (minus drift).
+    if (!trusted && block.timestamp - prev.timestamp < (gap - 1) * TICKS_PER_SLOT * TICK_MS - MAX_CLOCK_DRIFT_MS) throw new Error('block is too close to its parent for the slots it skips');
     if (!trusted) {
       if (!schnorrVerify(block.signature, hexToBytes(block.hash), parsePub(block.proposer))) throw new Error('bad block signature');
       const poh = verifyPoh(prev.pohEnd, block.poh?.entries, { maxTicks: MAX_BLOCK_TICKS, maxEntries: MAX_BLOCK_TXS + 64 });
@@ -364,7 +367,8 @@ export class Blockchain {
       const block = this.buildBlock(prev.slot + gap, local, rec);
       const digest = voteDigest('precommit', block.height, 0, block.hash, block.prevHash);
       block.commit = { round: 0, votes: localValidators.map((v) => ({ validator: v.pubHex, sig: schnorrSign(digest, v.secret) })) };
-      return this.applyBlock(block);
+      // Self-produced test driver: the blocks are signed by this process, and its fast-forwarded slots are not wall time.
+      return this.applyBlock(block, { trusted: true });
     }
     return null;
   }

@@ -104,3 +104,20 @@ test('consensus input hardening: far-future proposals, one proposal per round, s
   const stranger = Wallet.generate();
   assert.match(c.onHello({ url: 'http://x.example', validator: stranger.pubHex, sig: schnorrSign(helloDigest('http://x.example'), stranger.secret) }).error, /not an active validator/);
 });
+
+test('unstaking in an earlier block than the offence, same epoch, is still slashed', async () => {
+  const { chain, fund, nonce } = await setup('audit-early-unstake');
+  const op = Wallet.generate(), reporter = Wallet.generate();
+  fund(op, 20_000); fund(reporter, 10);
+  chain.produceBlock();
+  chain.submitTx(op.registerValidator({ name: 'early', amount: 15_000n * UNIT, nonce: nonce(op) }));
+  chain.produceBlock();
+  chain.submitTx(op.unstake({ validator: op.pubHex, amount: 15_000n * UNIT, nonce: nonce(op) }));
+  chain.produceBlock(); // the unstake is committed first; its weight still counts until the epoch ends
+  const [a, b] = doubleVote(chain, op.asValidator('early'), chain.height + 1); // equivocation at a later height
+  chain.submitTx(evidenceTx(reporter, nonce(reporter), a, b));
+  chain.produceBlock();
+  const u = chain.state.unbonding.find((x) => x.address === op.address);
+  assert.equal(u.amount, 15_000n * UNIT - (15_000n * UNIT * BigInt(SLASH_BPS)) / 10_000n);
+  assert.ok(chain.supply().conserved);
+});

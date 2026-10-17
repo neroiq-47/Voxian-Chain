@@ -26,7 +26,7 @@
 *Time is measured in PoH ticks, not wall clocks.*
 - `TICKS_PER_SLOT` ticks make a slot; `SLOTS_PER_EPOCH` slots make an epoch.
 - Each block has a `slot` greater than its parent's and may skip at most `MAX_SLOT_GAP` (120) slots. Its PoH must prove that every skipped slot really elapsed: `ticks ≥ (slot − parentSlot − 1) × TICKS_PER_SLOT`, with no cap. During a longer stall, the round-to-slot mapping wraps so blocks always stay provable.
-- The leader schedule is fixed per epoch. It is stake-weighted, uses a snapshot of the validator set taken at the epoch boundary, and is seeded by the anchor block's hash. Leaders hold `LEADER_SLOTS` consecutive slots.
+- The leader schedule is fixed per epoch. It is stake-weighted, uses a snapshot of the validator set taken at the epoch boundary, and its seed chains from the previous epoch's seed plus the anchor's height, slot and epoch (not its hash, which a proposer could grind). Leaders hold `LEADER_SLOTS` consecutive slots.
 - This replaces the old wall-clock round timer: a leader can only claim a later slot by doing the sequential hashing.
 - **Done when:** blocks from the wrong leader for a slot, or with too few ticks for the slots they skip, are rejected, and the schedule is identical on every node.
 
