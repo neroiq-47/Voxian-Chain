@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#080708">
+<meta name="description" content="Voxian Chain: an experimental Layer 1 for private payments and autonomous AI agents. Zero-knowledge shielded notes, x402 machine payments, Proof of History and open Proof of Stake.">
+<meta property="og:title" content="VOXIAN CHAIN — Money first. Love later.">
+<meta property="og:description" content="Private payments for the autonomous economy. ZK + x402 + AI agents on an experimental PoH/PoS Layer 1 devnet.">
+<meta property="og:image" content="https://neroiq-47.github.io/Voxian-Chain/assets/banner.jpg">
+<meta property="og:url" content="https://neroiq-47.github.io/Voxian-Chain/">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<title>VOXIAN CHAIN — Money first. Love later.</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect x='18' y='18' width='64' height='64' rx='12' transform='rotate(45 50 50)' fill='%23111012' stroke='%23b65cff' stroke-width='4'/><text x='50' y='63' font-size='38' text-anchor='middle' fill='%23b65cff' font-family='Arial' font-weight='900'>V</text></svg>">
+<style>
+:root{--bg:#080708;--panel:#111012;--text:#f4f0f5;--muted:#a7a0ab;--purple:#b65cff;--purple2:#7c2bdb;--line:#302337;--max:1180px;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,Arial,sans-serif;line-height:1.6}
+body:before{content:"";position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at 78% 14%,#8d2bd51c,transparent 34%),radial-gradient(ellipse at 12% 65%,#b65cff0b,transparent 30%);z-index:-1}
+a{color:inherit;text-decoration:none}.wrap{width:min(var(--max),calc(100% - 42px));margin:auto}
+nav{height:84px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #ffffff10}
+.brand{display:flex;align-items:center;gap:11px;font-size:14px;font-weight:900;letter-spacing:.18em}.mark{height:36px;width:36px;border:1px solid #b65cff88;background:#b65cff15;display:grid;place-items:center;color:var(--purple);font-weight:900;transform:rotate(45deg);border-radius:9px;box-shadow:0 0 22px #a83cff20}.mark span{transform:rotate(-45deg)}
+.navlinks{display:flex;gap:28px;align-items:center;font-size:13px;color:var(--muted)}.navlinks a:hover{color:var(--purple)}
+.button{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 17px;border:1px solid #b65cff66;border-radius:3px;font-weight:800;font-size:12px;letter-spacing:.07em;text-transform:uppercase;transition:.2s;background:none;color:var(--text);cursor:pointer;font-family:inherit}.button:hover{box-shadow:0 0 24px #a83cff25;border-color:var(--purple);transform:translateY(-2px)}.primary{background:var(--purple);color:#100814;border-color:var(--purple)}
+.hero{padding:70px 0 82px;display:grid;grid-template-columns:1fr .78fr;gap:55px;align-items:center;min-height:600px}.eyebrow{color:var(--purple);font-size:11px;letter-spacing:.24em;text-transform:uppercase;font-weight:900;display:flex;align-items:center;gap:10px}.eyebrow:before{content:"";width:23px;height:1px;background:var(--purple);box-shadow:0 0 10px var(--purple)}
+h1{font-size:clamp(48px,7vw,88px);line-height:.93;letter-spacing:-.075em;margin:24px 0 25px;font-weight:900;text-transform:uppercase}h1 em{font-style:normal;color:var(--purple);text-shadow:0 0 34px #a83cff28}
+.lead{color:#bcb5c2;max-width:550px;font-size:17px}.actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:29px}.fine{font-size:11px;color:#79717e;margin-top:18px;letter-spacing:.06em}
+.mascot-frame{position:relative;max-width:390px;margin:auto;width:100%;padding:12px;border:1px solid #b65cff45;background:linear-gradient(145deg,#b65cff18,transparent 45%);box-shadow:0 0 60px #922ee012}.mascot-frame:before,.mascot-frame:after{content:"";position:absolute;width:42px;height:42px;border-color:var(--purple);opacity:.8}.mascot-frame:before{top:-5px;left:-5px;border-top:1px solid;border-left:1px solid}.mascot-frame:after{bottom:-5px;right:-5px;border-bottom:1px solid;border-right:1px solid}.mascot{display:block;width:100%;aspect-ratio:1;object-fit:cover;filter:grayscale(1) contrast(1.05)}.image-tag{position:absolute;bottom:24px;left:24px;background:#09070be8;border:1px solid #b65cff66;padding:8px 11px;font-size:10px;letter-spacing:.15em;color:#e8d5ff;text-transform:uppercase}
+.banner{position:relative;margin:0 auto 20px;border:1px solid #ffffff12;overflow:hidden;background:#050505}.banner img{width:100%;display:block;max-height:390px;object-fit:cover;filter:grayscale(1) contrast(1.06);opacity:.78}.banner:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,#09070b2b,#b65cff12 65%,#09070b44);pointer-events:none}.banner-label{position:absolute;right:5%;bottom:10%;z-index:1;color:#fff;text-align:right;text-transform:uppercase;font-size:clamp(24px,4vw,44px);font-weight:900;line-height:.95;letter-spacing:-.05em;text-shadow:0 0 24px #000}.banner-label span{display:block;font-size:10px;letter-spacing:.3em;color:#d9a8ff;margin-bottom:10px}
+.stats{display:grid;grid-template-columns:repeat(6,1fr);border:1px solid var(--line);background:#0d0b0e}.stat{padding:20px 18px;border-right:1px solid var(--line)}.stat:last-child{border-right:0}.stat b{display:block;font-size:22px;letter-spacing:-.04em;color:var(--text)}.stat span{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+section{padding:70px 0}.section-head{max-width:700px;margin-bottom:30px}.kicker{font-size:10px;letter-spacing:.25em;color:var(--purple);font-weight:900;text-transform:uppercase}h2{font-size:clamp(32px,4.7vw,53px);line-height:1.02;letter-spacing:-.06em;text-transform:uppercase;margin:13px 0 18px}p{margin-top:0}.section-head p,.card p,.step p{color:var(--muted)}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:13px}.card{border:1px solid var(--line);padding:25px;background:linear-gradient(135deg,#171218b8,#0d0b0e);min-height:210px;position:relative}.card:before{content:"";position:absolute;left:0;top:0;width:35px;height:2px;background:var(--purple);box-shadow:0 0 12px #b65cff66}.symbol{font-size:26px;color:var(--purple);margin-bottom:22px}.card h3,.step h3{margin:0 0 9px;font-size:17px;text-transform:uppercase;letter-spacing:-.02em}.card p{font-size:14px;margin:0}.card .tag{display:inline-block;margin-top:14px;font-size:10px;letter-spacing:.18em;color:#d9a8ff;text-transform:uppercase}
+.split{display:grid;grid-template-columns:.8fr 1.2fr;gap:48px;align-items:start}.steps{display:grid;gap:10px}.step{display:grid;grid-template-columns:38px 1fr;gap:14px;border:1px solid var(--line);padding:17px;background:#110e13}.num{height:32px;width:32px;display:grid;place-items:center;border:1px solid #b65cff66;color:var(--purple);font-size:11px;font-weight:900}.step h3{font-size:14px;margin-bottom:4px}.step p{font-size:13px;margin:0}.step code{font-family:var(--mono);font-size:12px;color:#e8d5ff}
+.terminal{border:1px solid var(--line);background:#0b090c;font-family:var(--mono);font-size:13px;line-height:1.9;padding:22px 24px;overflow-x:auto;position:relative}.terminal:before{content:"● ● ●";position:absolute;top:10px;right:16px;font-size:9px;letter-spacing:.3em;color:#4a3d52}.terminal .c{color:#6f6676}.terminal .p{color:var(--purple)}
+.roadmap .step.done{border-color:#b65cff66;background:linear-gradient(105deg,#b65cff14,#110e13 60%)}.status{font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:#7e7585;margin-left:8px;font-weight:800}.done .status{color:var(--purple)}
+.tiers{display:grid;grid-template-columns:repeat(3,1fr);gap:13px}.tier{border:1px solid var(--line);padding:22px;background:#0f0c10;position:relative}.tier.featured{border-color:#b65cff77;background:linear-gradient(145deg,#b65cff16,#0f0c10 55%)}.tier .name{font-size:12px;letter-spacing:.18em;text-transform:uppercase;font-weight:900;color:#e8d5ff}.tier .price{font-size:34px;font-weight:900;letter-spacing:-.05em;margin:6px 0 2px}.tier .price small{font-size:12px;color:var(--muted);letter-spacing:0;font-weight:600}.tier p{font-size:13px;color:var(--muted);margin:8px 0 0}
+.button:focus-visible,.bull-btn:focus-visible,.bull-hero a:focus-visible{outline:2px solid var(--purple);outline-offset:3px}
+.cta{border:1px solid #b65cff55;padding:32px;background:linear-gradient(105deg,#b65cff12,transparent 65%);display:flex;justify-content:space-between;align-items:center;gap:24px}.cta h2{font-size:clamp(26px,3vw,38px);margin:9px 0}.cta p{color:var(--muted);margin:0;max-width:620px}.disclaimer{font-size:11px;color:#7e7585;margin-top:18px}
+.bull-btn{display:inline-flex;align-items:center;gap:8px;padding:3px 14px 3px 3px;border:1px solid #39ff6a66;border-radius:999px;background:#0b120d;color:#39ff6a;font-weight:900;font-size:11px;letter-spacing:.14em;text-transform:uppercase;box-shadow:0 0 16px #39ff6a22;transition:.2s}.bull-btn img{width:36px;height:36px;border-radius:50%;display:block}.bull-btn:hover{transform:translateY(-2px);box-shadow:0 0 26px #39ff6a55;color:#7dff9b}
+.bull-hero{display:grid;place-items:center;text-align:center;margin:0 auto 34px;max-width:520px}.bull-hero a{display:block;border-radius:50%}.bull-hero img{width:220px;height:220px;display:block;border-radius:50%;filter:drop-shadow(0 0 26px #39ff6a55);animation:breathe 3.2s ease-in-out infinite;transition:transform .25s}.bull-hero a:hover img{transform:scale(1.06) rotate(-2deg);filter:drop-shadow(0 0 40px #39ff6a99)}.bull-hero .cap{margin-top:12px;font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:#7dff9b;font-weight:900}
+@keyframes breathe{50%{filter:drop-shadow(0 0 38px #39ff6a88)}}@media(prefers-reduced-motion:reduce){.bull-hero img{animation:none}}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);opacity:0;background:#140f17;border:1px solid var(--purple);color:#e8d5ff;padding:10px 16px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;transition:.25s;pointer-events:none}.toast.show{opacity:1;transform:translateX(-50%)}
+footer{border-top:1px solid #ffffff12;padding:25px 0;color:#817886;font-size:11px;letter-spacing:.04em}.foot{display:flex;justify-content:space-between;gap:15px;align-items:center}.foot a:hover{color:var(--purple)}.foot .links{display:flex;gap:18px}
+@media(max-width:900px){.stats{grid-template-columns:repeat(3,1fr)}.stat:nth-child(3){border-right:0}.stat:nth-child(-n+3){border-bottom:1px solid var(--line)}}
+@media(max-width:800px){.hero{grid-template-columns:1fr;gap:40px;padding-top:52px}.mascot-frame{max-width:340px}.cards,.tiers{grid-template-columns:1fr}.card{min-height:auto}.split{grid-template-columns:1fr;gap:20px}.navlinks{gap:14px}.navlinks a:not(.button):not(.bull-btn){display:none}.banner img{min-height:180px;object-fit:cover}.cta{align-items:flex-start;flex-direction:column}}
+@media(max-width:480px){.wrap{width:calc(100% - 28px)}nav{height:72px}.brand{font-size:12px;letter-spacing:.12em}.hero{padding:45px 0 55px}h1{font-size:54px}.lead{font-size:15px}section{padding:52px 0}.banner-label{font-size:24px}.foot{align-items:flex-start;flex-direction:column}.stats{grid-template-columns:repeat(2,1fr)}.stat{border-right:0!important;border-bottom:1px solid var(--line)}.navlinks .button:not(.primary){display:none}.bull-btn span{display:none}.bull-btn{padding:3px}}
+.demo-frame { display: block; width: 100%; height: min(820px, 88vh); min-height: 560px; border: 1px solid var(--line); background: #080708; }
+.demo-embed .fine { margin-top: 14px; }
+@media (max-width: 480px) { .demo-frame { min-height: 620px; } }
+</style>
+</head>
+<body>
+<header class="wrap">
+  <nav>
+    <a class="brand" href="#top"><span class="mark"><span>V</span></span><span>VOXIAN <span style="color:var(--purple)">CHAIN</span></span></a>
+    <div class="navlinks">
+      <a href="#protocol">Protocol</a>
+      <a href="#flow">Agent flow</a>
+      <a href="#run">Run it</a>
+      <a href="#support">Support</a>
+      <a class="button" href="https://github.com/neroiq-47/Voxian-Chain" target="_blank" rel="noopener">GitHub ↗</a>
+      <a class="bull-btn" href="#support" aria-label="Donate to Voxian"><img src="assets/donate-bull.png" alt="" width="36" height="36"><span>Donate</span></a>
+      <a class="button primary" href="app/">Live demo</a>
+    </div>
+  </nav>
+</header>
+
+<main id="top">
+  <div class="wrap hero">
+    <div>
+      <div class="eyebrow">The agent economy is coming</div>
+      <h1>Money<br>first.<br><em>Love later.</em></h1>
+      <p class="lead">Voxian Chain is an experimental Layer 1 for private payments and autonomous AI agents. It combines zero-knowledge shielded notes, x402 machine payments, a Proof of History clock and open Proof of Stake, and the whole devnet runs in your browser.</p>
+      <div class="actions">
+        <a class="button primary" href="app/">Launch the live demo →</a>
+        <a class="button" href="https://github.com/neroiq-47/Voxian-Chain" target="_blank" rel="noopener">Explore the code ↗</a>
+      </div>
+      <p class="fine">INDEPENDENT BUILD. EARLY-STAGE DEVNET. ZERO DEPENDENCIES. BUILT FOR WHAT COMES NEXT.</p>
+    </div>
+    <div class="mascot-frame">
+      <img class="mascot" src="assets/mask.jpg" alt="Monochrome horned mask artwork representing the Voxian visual identity" width="491" height="491">
+      <div class="image-tag">Voxian // Agent protocol</div>
+    </div>
+  </div>
+
+  <div class="wrap banner">
+    <img src="assets/banner.jpg" alt="Monochrome money-themed artwork" loading="lazy">
+    <div class="banner-label"><span>Voxian Chain / 001</span>Build for<br>the unseen.</div>
+  </div>
+
+  <div class="wrap stats" aria-label="Key figures">
+    <div class="stat"><b>210M</b><span>VOX max supply</span></div>
+    <div class="stat"><b>8</b><span>Decimals</span></div>
+    <div class="stat"><b>1 s</b><span>PoH slots</span></div>
+    <div class="stat"><b>&gt; 2/3</b><span>BFT finality</span></div>
+    <div class="stat"><b>55-bit</b><span>ZK range proofs</span></div>
+    <div class="stat"><b>0</b><span>Dependencies</span></div>
+  </div>
+
+  <section class="demo-band" aria-labelledby="demo-title">
+    <div class="wrap">
+      <div class="cta">
+        <div>
+          <div class="kicker">Devnet is live</div>
+          <h2 id="demo-title">Try it in your browser</h2>
+          <p>Create a wallet, claim devnet VOX from the faucet, send a private payment and buy data with x402. No install, and the whole chain runs in this tab.</p>
+        </div>
+        <a class="button primary" href="app/">Open the live demo →</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="demo-embed" id="demo" aria-labelledby="demo-embed-title">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="kicker">Live devnet</div>
+        <h2 id="demo-embed-title">The demo, on this page</h2>
+        <p>The whole chain runs in this tab: wallet, faucet, x402 market, AI agent, staking and explorer.</p>
+      </div>
+      <iframe class="demo-frame" src="app/" title="Voxian live devnet demo" loading="lazy" allow="clipboard-write"></iframe>
+      <p class="fine"><a href="app/">Open the demo full screen →</a></p>
+    </div>
+  </section>
+
+  <section id="protocol">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="kicker">Core protocol</div>
+        <h2>Not just another chain.<br><span style="color:var(--purple)">A new kind of interaction.</span></h2>
+        <p>Voxian sits where privacy, programmable payments and AI agents meet. Everything below is implemented in the repo and running on the devnet.</p>
+      </div>
+      <div class="cards">
+        <article class="card"><div class="symbol">◈</div><h3>Zero-knowledge privacy</h3><p>Confidential notes with Pedersen commitments, zero-knowledge range proofs, balance proofs and stealth one-time addresses. Amounts and recipients stay hidden on-chain.</p><span class="tag">Shield · Send · Unshield</span></article>
+        <article class="card"><div class="symbol">↗</div><h3>x402 machine payments</h3><p>APIs answer <b>HTTP 402 Payment Required</b>. An agent can pay with a gasless signed authorization, or privately with a shielded note that only the service's facilitator can verify.</p><span class="tag">exact · zk-shielded</span></article>
+        <article class="card"><div class="symbol">⌘</div><h3>Autonomous agents</h3><p>A budgeted agent finds paid services, plans from a goal and pays per request with no human approving each step. It switches to private payments when it holds shielded funds.</p><span class="tag">Discover · Plan · Pay</span></article>
+        <article class="card"><div class="symbol">⧗</div><h3>Proof of History</h3><p>A sequential SHA-256 clock. Every transaction is mixed into the chain, giving verifiable ordering, and a leader can only claim a later slot by doing the hashing.</p><span class="tag">Slots · Epochs · Leader schedule</span></article>
+        <article class="card"><div class="symbol">◆</div><h3>Open Proof of Stake</h3><p>Register a validator or delegate VOX. Block rewards are shared after commission, and validators sign with a crash-safe signing log so they can't double-sign by accident.</p><span class="tag">Stake · Delegate · Unbond</span></article>
+        <article class="card"><div class="symbol">⛓</div><h3>BFT finality &amp; slashing</h3><p>Tendermint-style prevote and precommit finality. The chain survives one validator in four going down. Double-signing is detected automatically: the offender is slashed, the VOX burned and the validator jailed.</p><span class="tag">Final in one round</span></article>
+      </div>
+    </div>
+  </section>
+
+  <section id="flow">
+    <div class="wrap split">
+      <div class="section-head">
+        <div class="kicker">The bigger picture</div>
+        <h2>When software can pay for what it needs.</h2>
+        <p>AI is moving from answering questions to taking action. That shift needs infrastructure that lets agents pay for services, privately and without asking permission at every step.</p>
+        <p style="color:#d4b2f5">The next interface may not be a screen. It may be an agent, making things happen in the background.</p>
+      </div>
+      <div class="steps">
+        <div class="step"><div class="num">01</div><div><h3>Request</h3><p>An agent calls a paid API: a price oracle, AI summarizer or data feed.</p></div></div>
+        <div class="step"><div class="num">02</div><div><h3>402 Payment Required</h3><p>The service answers with its price and two payment options: <code>exact</code> and <code>zk-shielded</code>.</p></div></div>
+        <div class="step"><div class="num">03</div><div><h3>Pay privately</h3><p>The agent builds a shielded payment with zero-knowledge proofs and retries with an <code>X-PAYMENT</code> header.</p></div></div>
+        <div class="step"><div class="num">04</div><div><h3>Settle &amp; finalize</h3><p>The facilitator settles on-chain. The payment is ordered by PoH and becomes final once validators holding more than 2/3 of the stake sign.</p></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="run">
+    <div class="wrap split">
+      <div class="section-head">
+        <div class="kicker">Run it yourself</div>
+        <h2>One command.<br><span style="color:var(--purple)">No npm dependencies.</span></h2>
+        <p>Pure JavaScript on Node 20+, with no packages to install. Run a single node, a four-validator cluster, or an AI agent that pays for data over x402. Or skip all of it and open the <a href="app/" style="color:var(--purple)">in-browser demo</a>.</p>
+      </div>
+      <div class="terminal" role="region" aria-label="Quick start commands">
+        <div><span class="p">$</span> git clone https://github.com/neroiq-47/Voxian-Chain</div>
+        <div><span class="p">$</span> cd Voxian-Chain</div>
+        <div><span class="p">$</span> npm start <span class="c"># full node + web app → localhost:8402</span></div>
+        <div><span class="p">$</span> npm run cluster <span class="c"># 4 validators, BFT finality</span></div>
+        <div><span class="p">$</span> npm run agent <span class="c"># an AI agent pays via x402</span></div>
+        <div><span class="p">$</span> npm test <span class="c"># crypto, ZK, consensus, x402</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="roadmap">
+    <div class="wrap split roadmap">
+      <div class="section-head">
+        <div class="kicker">Roadmap</div>
+        <h2>Built in public.<br>Shipped in steps.</h2>
+        <p>The path from the white paper. Mainnet is only considered after independent security reviews.</p>
+      </div>
+      <div class="steps">
+        <div class="step done"><div class="num">01</div><div><h3>Technical design<span class="status">Done</span></h3><p>ZK + x402 + PoH/PoS architecture, documented in the repo.</p></div></div>
+        <div class="step done"><div class="num">02</div><div><h3>Payment proof of concept<span class="status">Live devnet</span></h3><p>Shielded payments, x402 agents and a validator cluster, running today.</p></div></div>
+        <div class="step"><div class="num">03</div><div><h3>Public testnet<span class="status">Next</span></h3><p>Independent validator keys and public seed nodes.</p></div></div>
+        <div class="step"><div class="num">04</div><div><h3>Independent security reviews<span class="status">Funding</span></h3><p>External audits of the cryptography and consensus.</p></div></div>
+        <div class="step"><div class="num">05</div><div><h3>Mainnet readiness<span class="status">Later</span></h3><p>Assessed only after the reviews are done.</p></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="support">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="kicker">Support the build</div>
+        <h2>Fund what comes next.</h2>
+        <p>Sponsorship funds independent security reviews, testnet infrastructure and development. Pick a tier, from budget-friendly to enterprise.</p>
+      </div>
+      <div class="bull-hero">
+        <a href="#donate-options" aria-label="Donate: show donation options"><img src="assets/donate-bull.png" alt="" width="220" height="220"></a>
+        <div class="cap">Tap the bull to donate</div>
+      </div>
+      <div class="tiers">
+        <div class="tier"><div class="name">☕ Supporter</div><div class="price">$5<small> / month</small></div><p>Sponsor badge and thanks in the monthly update.</p></div>
+        <div class="tier"><div class="name">🛠 Builder</div><div class="price">$25<small> / month</small></div><p>Your name in the README and a monthly progress update.</p></div>
+        <div class="tier"><div class="name">🤖 Agent Pioneer</div><div class="price">$100<small> / month</small></div><p>Priority triage of your issues and early testnet news.</p></div>
+        <div class="tier"><div class="name">⛓ Validator Partner</div><div class="price">$500<small> / month</small></div><p>Logo in the README and web app (planned), plus a quarterly roadmap call.</p></div>
+        <div class="tier featured"><div class="name">🏢 Enterprise</div><div class="price">$2,500<small> / month</small></div><p>2 hours a month of x402 and shielded-payment integration support.</p></div>
+        <div class="tier featured"><div class="name">🏛 Enterprise Partner</div><div class="price">$10,000<small> / month</small></div><p>Top logo placement (planned), 8 hours a month of support, and credit as a funder of the security review.</p></div>
+      </div>
+      <div id="donate-options" data-donate-widget style="margin-top:13px">
+        <!-- Static fallback: shown when JavaScript is off or the widget script can't load; replaced by assets/donate.js. -->
+        <div class="cta" style="flex-direction:column;align-items:flex-start">
+          <div><div class="kicker">Donate</div><h2>GitHub Sponsors or Solana</h2>
+            <p>Sponsor on <a href="https://github.com/sponsors/neroiq-47" target="_blank" rel="noopener" style="color:var(--purple)">GitHub Sponsors</a>, or send USDC/SOL on <b>Solana mainnet</b> to:</p>
+            <p style="font-family:var(--mono);word-break:break-all;color:#e8d5ff;margin-top:10px">5g4xQALSN81J1EseRkkb4GGWJiLAJCPRnoqUeB5jYWkk</p></div>
+          <a class="button primary" href="solana:5g4xQALSN81J1EseRkkb4GGWJiLAJCPRnoqUeB5jYWkk">Open in wallet</a>
+        </div>
+      </div>
+      <p class="disclaimer">Donations are gifts to open-source development. They are not an investment, equity or a token sale, and they do not buy, reserve or promise any VOX. Full details are in <a href="https://github.com/neroiq-47/Voxian-Chain/blob/main/docs/SPONSORS.md" target="_blank" rel="noopener" style="color:var(--purple)">docs/SPONSORS.md</a>.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="cta">
+        <div><div class="kicker">Follow the build</div><h2>Curious? Get into the repo.</h2><p>Voxian is an early-stage engineering experiment. Read the code, run the devnet, star the repo and follow the protocol as it develops.</p></div>
+        <div class="actions" style="margin-top:0"><a class="button" href="app/">Live demo</a><a class="button primary" href="https://github.com/neroiq-47/Voxian-Chain" target="_blank" rel="noopener">View GitHub ↗</a></div>
+      </div>
+      <p class="disclaimer">Note: this is an early-stage devnet MVP. Voxian is a proposed project, and VOX is a proposed token; devnet tokens have no value. The cryptographic components have not been independently audited, and no production-readiness or security guarantees are implied.</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <a class="brand" href="#top"><span style="color:var(--purple)">V/</span> VOXIAN CHAIN</a>
+    <span>PRIVATE BY DESIGN. AUTONOMOUS BY NATURE.</span>
+    <div class="links"><a href="app/">DEMO</a><a href="https://github.com/sponsors/neroiq-47" target="_blank" rel="noopener">SPONSOR ↗</a><a href="https://github.com/neroiq-47/Voxian-Chain" target="_blank" rel="noopener">GITHUB ↗</a></div>
+  </div>
+</footer>
+<script src="assets/vendor/qrcode.js"></script>
+<script src="assets/donate.js"></script>
+</body>
+</html>

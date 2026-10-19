@@ -77,7 +77,8 @@ export class Consensus {
   }
 
   saveLock() {
-    try { this.storage?.saveMeta?.('lock', { h: this.h, lockedHash: this.lockedHash, lockedRound: this.lockedRound, validHash: this.validHash, validRound: this.validRound }); } catch { /* best effort */ }
+    // Throws if the write fails: callers must not vote on a lock that is not on disk.
+    this.storage?.saveMeta?.('lock', { h: this.h, lockedHash: this.lockedHash, lockedRound: this.lockedRound, validHash: this.validHash, validRound: this.validRound });
   }
 
   ensureHeight() { if (this.h !== this.chain.height + 1) this.resetHeight(); }
@@ -96,7 +97,9 @@ export class Consensus {
     const sig = schnorrSign(digest, v.secret);
     this.signLog.set(key, { hash, sig });
     for (const k of this.signLog.keys()) if (Number(k.split(':')[2]) < this.h - 5) this.signLog.delete(k);
-    try { this.storage?.saveMeta?.('signlog', Object.fromEntries(this.signLog)); } catch { /* best effort */ }
+    // Release the signature only once the guard is on disk; otherwise a restart could sign a conflicting value.
+    try { this.storage?.saveMeta?.('signlog', Object.fromEntries(this.signLog)); }
+    catch (e) { this.signLog.delete(key); this.log(`not signing: signing log not persisted (${e.message})`); return null; }
     return sig;
   }
 
@@ -169,8 +172,10 @@ export class Consensus {
     let leader;
     try { leader = this.chain.leaderFor(this.slotOf(msg.round)); } catch (e) { return { ok: false, error: e.message }; }
     if (msg.proposer !== leader.pub) return { ok: false, error: 'not the leader for this round' };
+    // A new block must sit in its round's slot; a re-proposal must sit in the slot of the round it re-proposes.
+    const slot = this.slotOf(msg.validRound === -1 ? msg.round : msg.validRound);
+    if (!msg.block || msg.block.slot !== slot) return { ok: false, error: 'block slot does not match its round' };
     if (!schnorrVerify(msg.sig, proposalDigest(msg.height, msg.round, msg.validRound, msg.blockHash), parsePub(msg.proposer))) return { ok: false, error: 'bad proposal signature' };
-    this.seenProposalRounds.add(msg.round); // only the first signed proposal per round is ever validated
     const hash = msg.blockHash;
     if (msg.block.hash !== hash || this.invalid.has(hash)) return { ok: false, error: 'invalid block' };
     if (!this.blocks.has(hash)) {
@@ -179,6 +184,7 @@ export class Consensus {
       const { commit, ...clean } = msg.block;
       this.blocks.set(hash, clean);
     }
+    this.seenProposalRounds.add(msg.round); // only a validated proposal claims its round
     this.proposals.set(msg.round, { hash, validRound: msg.validRound, msg });
     this.tryPrevote(this.round);
     this.tallyAll();
@@ -300,12 +306,15 @@ export class Consensus {
     for (const hash of new Set([...votes.values()].map((v) => v.hash))) {
       if (!this.quorum(votes, hash)) continue;
       if (kind === 'prevote') {
-        if (round > this.validRound) { this.validHash = hash; this.validRound = round; this.saveLock(); }
+        if (round > this.validRound) {
+          this.validHash = hash; this.validRound = round;
+          try { this.saveLock(); } catch (e) { this.log(`lock not persisted (${e.message})`); }
+        }
         if (round > this.roundFloor) this.roundFloor = round;
         if (round === this.round && !this.precommitted.has(round) && this.local.size) {
           this.precommitted.add(round);
           this.lockedHash = hash; this.lockedRound = round;
-          this.saveLock(); // persist the lock before the precommit leaves this node
+          try { this.saveLock(); } catch (e) { this.log(`not precommitting: lock not persisted (${e.message})`); continue; } // persist the lock before the precommit leaves this node
           this.castVotes('precommit', round, hash);
         }
       } else {

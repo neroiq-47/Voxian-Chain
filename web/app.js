@@ -86,14 +86,18 @@ const views = {};
 
 views.overview = {
   render: () => `
-    <section class="hero">
-      <h1>Privacy meets the <span>autonomous economy</span>.</h1>
+    <section class="hero hero-split">
+    <div>
+      <div class="eyebrow">Live devnet · ${mode === 'browser' ? 'running in your browser' : 'full node'}</div>
+      <h1>Privacy meets the <span>autonomous economy.</span></h1>
       <p>Voxian is a Layer 1 blockchain combining zero-knowledge technology with x402 payments, so people, apps and AI agents can pay for
       digital services privately, securely and automatically. This is a live devnet. Every block, proof and payment below is real and runs ${mode === 'browser' ? 'in your browser' : 'on this node'}.</p>
       <div class="pills"><span class="pill">🌐 Built for AI agents, APIs &amp; services</span><span class="pill">🔐 ZK confidential notes</span><span class="pill">⚡ x402 programmable payments</span><span class="pill">⛓️ Independent Layer 1</span></div>
-      <div class="row" style="margin-top:14px"><a href="#wallet"><button>Open wallet →</button></a><a href="#agent"><button class="ghost">Run an AI agent</button></a></div>
+      <div class="row" style="margin-top:14px"><a class="btn" href="#wallet">Open wallet →</a><a class="btn ghost" href="#agent">Run an AI agent</a></div>
+    </div>
+      <figure class="mascot-frame"><img class="mascot" src="assets/mask.jpg" alt="" width="390" height="390" /><figcaption class="image-tag">Voxian // agent protocol</figcaption></figure>
     </section>
-    <div class="grid g4 section" id="stats"></div>
+    <div class="grid g4 section stats-strip" id="stats"></div>
     <div class="grid g3 section">
       <div class="card span2"><div class="row between"><h3>Latest blocks</h3><a href="#explorer" class="small">Explorer →</a></div><div class="table-wrap" id="blocks"></div></div>
       <div class="card"><h3>Supply</h3><div id="supply"></div></div>
@@ -158,8 +162,8 @@ views.wallet = {
       <div class="card"><h3>Devnet faucet</h3><p class="small muted">Get 1,000 test VOX (30s cooldown).</p><button id="btn-faucet" class="volt">⚡ Request 1,000 VOX</button></div>
     </div>
     <div class="grid g2 section">
-      <div class="card"><h3>Public address</h3><div class="addr copy" data-copy="${esc(wallet.address)}" title="click to copy">${esc(wallet.address)}</div>
-        <h3 style="margin-top:14px">Shielded z-address</h3><div class="addr copy small" data-copy="${esc(wallet.zaddress)}" title="click to copy">${esc(wallet.zaddress)}</div>
+      <div class="card"><h3>Public address</h3><div class="addr copy" tabindex="0" role="button" data-copy="${esc(wallet.address)}" title="click to copy">${esc(wallet.address)}</div>
+        <h3 style="margin-top:14px">Shielded z-address</h3><div class="addr copy small" tabindex="0" role="button" data-copy="${esc(wallet.zaddress)}" title="click to copy">${esc(wallet.zaddress)}</div>
         <div class="row" style="margin-top:12px"><button class="ghost small" id="btn-new">New wallet</button><button class="ghost small" id="btn-export">Show seed</button><button class="ghost small" id="btn-import">Import seed</button></div>
         <div id="seed-box"></div></div>
       <div class="card"><h3>Send VOX (public)</h3>
@@ -189,7 +193,7 @@ views.wallet = {
     $('#w-shielded-sub').textContent = `${unspent.length} unspent note${unspent.length === 1 ? '' : 's'}`;
     $('#w-activity').innerHTML = a.txs.length ? `<table><tr><th>Type</th><th>Amount</th><th>Counterparty</th><th></th></tr>${a.txs.map((t) => {
       const out = t.from === wallet.address;
-      return `<tr class="click" data-go="#explorer/${t.hash}"><td>${typeTag(t)}</td><td class="${out ? 'bad' : 'ok'}">${out ? '−' : '+'}${vox(t.amount)}</td><td>${addrLink(out ? t.to : t.from)}</td><td class="muted small">${t.pending ? '' : '#' + t.height}</td></tr>`;
+      return `<tr class="click" data-go="#explorer/${esc(t.hash)}"><td>${typeTag(t)}</td><td class="${out ? 'bad' : 'ok'}">${out ? '−' : '+'}${vox(t.amount)}</td><td>${addrLink(out ? t.to : t.from)}</td><td class="muted small">${t.pending ? '' : '#' + t.height}</td></tr>`;
     }).join('')}</table>` : '<p class="muted small">No activity yet. Request VOX from the faucet to start.</p>';
     $('#w-notes').innerHTML = myNotes.length ? `<table><tr><th>Note</th><th>Value</th><th>Status</th></tr>${[...myNotes].reverse().map((n) => `
       <tr><td class="mono">${esc(short(n.id, 10, 4))}</td><td>${vox(n.value)}</td><td>${n.spent ? '<span class="muted">spent</span>' : n.confirmed ? '<span class="ok">unspent</span>' : '<span class="tag pending">pending</span>'}</td></tr>`).join('')}</table>` : '<p class="muted small">No notes yet. Shield some VOX.</p>';
@@ -197,7 +201,7 @@ views.wallet = {
   bind() {
     $('#btn-faucet').onclick = (e) => busy(e.target, 'Requesting…', async () => { const r = await api.faucet(wallet.address); toast(`Faucet sent ${r.formatted} VOX · tx ${short(r.hash)}`, 'success'); refresh(); });
     $('#btn-new').onclick = () => { if (confirm('Create a new wallet? Save your current seed first if you want to keep it.')) { setWallet(Wallet.generate()); route(true); } };
-    $('#btn-export').onclick = () => { $('#seed-box').innerHTML = `<label>Seed (keep secret, devnet only)</label><div class="addr copy" data-copy="${esc(wallet.seedHex)}">${esc(wallet.seedHex)}</div>`; };
+    $('#btn-export').onclick = () => { $('#seed-box').innerHTML = `<label>Seed (keep secret, devnet only)</label><div class="addr copy" tabindex="0" role="button" data-copy="${esc(wallet.seedHex)}">${esc(wallet.seedHex)}</div>`; };
     $('#btn-import').onclick = () => {
       const s = prompt('Paste a 64-hex-character wallet seed:');
       if (!s) return;
@@ -260,7 +264,7 @@ views.market = {
     </div>`,
   async update() {
     const [rev, a] = await Promise.all([api.revenue(), api.account(wallet.address), scanMyNotes()]);
-    $('#m-revenue').innerHTML = `<div class="kv"><div>Public (exact)</div><div>${vox(rev.publicRevenue)}</div><div>🔐 Shielded</div><div>${vox(rev.shieldedRevenue)} · ${rev.shieldedPayments} payments</div></div>`;
+    $('#m-revenue').innerHTML = `<div class="kv"><div>Public (exact)</div><div>${vox(rev.publicRevenue)}</div><div>🔐 Shielded</div><div>${rev.shieldedRevenue == null ? '<span class="muted">hidden (operator token required)</span>' : vox(rev.shieldedRevenue) + ' · ' + rev.shieldedPayments + ' payments'}</div></div>`;
     $('#m-wallet').innerHTML = `<div>Public</div><div>${vox(a.pendingBalance)}</div><div>Shielded</div><div>${vox(shieldedBalance())}</div>`;
     if (!catalog) {
       catalog = await api.services();
@@ -377,7 +381,7 @@ views.staking = {
       <div class="card span2"><div class="row between"><h3>Proof of History clock</h3><span class="small muted" id="s-poh-mode"></span></div><div id="s-poh"><p class="muted small">Loading…</p></div></div>
       <div class="card"><h3>Upcoming leaders</h3><div id="s-leaders"></div></div>
     </div>
-    <div class="grid g4 section" id="s-stats"></div>
+    <div class="grid g4 section stats-strip" id="s-stats"></div>
     <div class="card section"><div class="row between"><h3>Validators</h3><span class="small muted">up to ${esc(st.maxValidators ?? 16)} active · set recomputed each epoch</span></div><div class="table-wrap" id="s-validators"></div></div>
     <div class="grid g3 section">
       <div class="card"><h3>Delegate</h3><p class="small muted">Bond VOX to a validator. You earn a share of its block rewards and fees after its commission. Min ${vox(st.minDelegation)}.</p>
@@ -545,7 +549,7 @@ views.explorer = {
 };
 
 const txTable = (txs) => `<table><tr><th>Tx</th><th>Type</th><th>From → To</th><th>Amount</th></tr>${txs.map((t) => `
-  <tr class="click" data-go="#explorer/${t.hash}"><td class="mono">${esc(short(t.hash, 8, 4))}</td><td>${typeTag(t)}</td><td class="small">${addrLink(t.from)} → ${addrLink(t.to)}</td><td>${t.amount ? vox(t.amount) : t.private ? '<span class="violet">hidden</span>' : '<span class="muted">—</span>'}</td></tr>`).join('')}</table>`;
+  <tr class="click" data-go="#explorer/${esc(t.hash)}"><td class="mono">${esc(short(t.hash, 8, 4))}</td><td>${typeTag(t)}</td><td class="small">${addrLink(t.from)} → ${addrLink(t.to)}</td><td>${t.amount ? vox(t.amount) : t.private ? '<span class="violet">hidden</span>' : '<span class="muted">—</span>'}</td></tr>`).join('')}</table>`;
 
 async function showExplorerItem(q) {
   const box = $('#x-result');
@@ -590,6 +594,29 @@ async function showExplorerItem(q) {
 }
 
 // ---------- about ----------
+// ---------- donate ----------
+const TIERS = [
+  ['☕', 'Supporter', '$5', 'Sponsor badge, thanks in the monthly update'],
+  ['🛠', 'Builder', '$25', 'Name in the README, monthly progress update'],
+  ['🤖', 'Agent Pioneer', '$100', 'Priority issue triage, early testnet news'],
+  ['⛓️', 'Validator Partner', '$500', 'Logo in the README and web app (planned), quarterly roadmap call'],
+  ['🏢', 'Enterprise', '$2,500', '2 h/month of x402 & shielded-payment integration support'],
+  ['🏛', 'Enterprise Partner', '$10,000', 'Top logo placement (planned), 8 h/month of support, named funder of the security review'],
+];
+views.donate = {
+  render: () => `
+    <section class="hero" style="text-align:center"><button type="button" class="bull-link" data-scroll="donate-options" aria-label="Show donation options"><img class="bull-big" src="assets/donate-bull-lg.png" alt="" width="168" height="168" /></button>
+      <h1>Support <span>Voxian</span></h1>
+      <p style="margin:0 auto">Voxian is built in the open. Donations fund independent security reviews (the white paper's step before any mainnet decision), public testnet infrastructure and development time.</p></section>
+    <div class="section" id="donate-options" data-donate-widget><div class="card notice">Donate on <a href="https://github.com/sponsors/neroiq-47" target="_blank" rel="noopener">GitHub Sponsors</a>, or send USDC/SOL on <b>Solana mainnet</b> to <code>5g4xQALSN81J1EseRkkb4GGWJiLAJCPRnoqUeB5jYWkk</code>. (The amount picker needs JavaScript.)</div></div>
+    <div class="card section"><h3>Sponsor tiers</h3><div class="table-wrap"><table><tr><th>Tier</th><th>Monthly</th><th>Benefits</th></tr>
+      ${TIERS.map(([icon, name, price, perks]) => `<tr><td>${icon} <b>${name}</b></td><td class="tier-price volt">${price}</td><td class="small">${perks}</td></tr>`).join('')}
+    </table></div><p class="small muted">Organisations can sponsor from a GitHub organisation account. Full details are in <a href="https://github.com/neroiq-47/Voxian-Chain/blob/main/docs/SPONSORS.md" target="_blank" rel="noopener">docs/SPONSORS.md</a>.</p></div>
+    <div class="card section notice">Donations are gifts to open-source development. They are not an investment, equity or a token sale, and they do not buy, reserve or promise any VOX. VOX is a proposed token and devnet tokens have no value.</div>`,
+  // The amount picker lives in assets/donate.js (shared with the landing page).
+  bind: () => window.VoxianDonate?.mount($('#donate-options')),
+};
+
 views.about = {
   render: () => `
     <section class="hero"><h1>About <span>Voxian</span></h1><p>Voxian is a proposed Layer 1 blockchain designed for private, verifiable digital payments in an increasingly automated world.</p></section>
@@ -646,11 +673,39 @@ async function refresh() {
   }
 }
 
+// Copy with fallbacks: async clipboard, then execCommand, then select the text for a manual copy.
+function selectText(el) {
+  if (!el) return;
+  const r = document.createRange();
+  r.selectNodeContents(el);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(r);
+}
+async function copyText(text, el) {
+  try {
+    if (!navigator.clipboard) throw new Error('no clipboard');
+    await navigator.clipboard.writeText(text);
+    toast('Copied', 'success');
+  } catch {
+    if (!el) return window.prompt('Copy this text', text);
+    selectText(el);
+    let ok = false;
+    try { ok = el ? document.execCommand('copy') : false; } catch { /* unsupported */ }
+    toast(ok ? 'Copied' : 'Address selected: press Ctrl+C (⌘C on Mac) to copy', ok ? 'success' : '');
+  }
+}
+document.addEventListener('keydown', (e) => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches?.('.addr[data-copy]')) { e.preventDefault(); copyText(e.target.dataset.copy, e.target); }
+});
+
 document.addEventListener('click', (e) => {
   const go = e.target.closest('[data-go]');
   if (go && !e.target.closest('a')) location.hash = go.dataset.go;
   const c = e.target.closest('[data-copy]');
-  if (c) navigator.clipboard?.writeText(c.dataset.copy).then(() => toast('Copied'), () => {});
+  if (c) copyText(c.dataset.copy, document.getElementById(c.dataset.select) || (c.classList.contains('addr') ? c : null));
+  const sc = e.target.closest('[data-scroll]');
+  if (sc) document.getElementById(sc.dataset.scroll)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 });
 
 async function boot() {

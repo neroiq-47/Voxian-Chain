@@ -11,13 +11,24 @@ Voxian is funded through **[GitHub Sponsors](https://github.com/sponsors/neroiq-
 | ☕ **Supporter** | $5 | Anyone who likes the project | Sponsor badge on your GitHub profile · thanks in the monthly update |
 | 🛠 **Builder** | $25 | Developers building on Voxian | Everything above · name in the README sponsor list · monthly progress update |
 | 🤖 **Agent Pioneer** | $100 | Indie teams and AI-agent builders | Everything above · priority triage of your issues · early access to testnet announcements |
-| ⛓️ **Validator Partner** | $500 | Startups and infrastructure operators | Everything above · small logo in the README and the web app's "Backed by" strip · quarterly roadmap call |
+| ⛓️ **Validator Partner** | $500 | Startups and infrastructure operators | Everything above · small logo in the README and web app (planned) · quarterly roadmap call |
 | 🏢 **Enterprise** | $2,500 | Companies evaluating private payments and x402 | Everything above · medium logo · 2 hours a month of integration support (x402 facilitator, shielded payments, agent payments) · early access to security-review summaries |
-| 🏛 **Enterprise Partner** | $10,000 | Organisations backing the security-review and testnet milestones | Everything above · large logo at the top of the README and web app · 8 hours a month of integration and architecture support · named credit as a funder of the independent security review · a non-binding seat at a quarterly roadmap review |
+| 🏛 **Enterprise Partner** | $10,000 | Organisations backing the security-review and testnet milestones | Everything above · large logo at the top of the README and web app (planned) · 8 hours a month of integration and architecture support · named credit as a funder of the independent security review · a non-binding seat at a quarterly roadmap review |
 
 **One-time sponsorships** of any amount are welcome too. Enable "custom amounts" in the dashboard so people can give exactly what fits their budget.
 
 Organisations can sponsor from a GitHub organisation account, and can pay by invoice through GitHub where eligible.
+
+## Donate with crypto (Solana)
+You can also donate SOL or SPL tokens (e.g. USDC) directly to the project wallet:
+
+```
+5g4xQALSN81J1EseRkkb4GGWJiLAJCPRnoqUeB5jYWkk
+```
+
+- **Network: Solana mainnet only.** Sending from another chain (Ethereum, BNB Chain and so on) will lose the funds.
+- Double-check the address after pasting it. Crypto transfers can't be reversed.
+- Crypto donations are gifts like any other sponsorship: no VOX, equity or returns are given in exchange. To be listed at a tier level, open an issue with your transaction signature.
 
 ## What the money pays for (in order)
 1. **Independent security reviews** of the cryptography (range proofs, stealth addresses, signatures) and of consensus (PoH, BFT, slashing). The white paper requires these before any mainnet decision.

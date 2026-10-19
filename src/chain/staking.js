@@ -126,7 +126,7 @@ export function applyStakingTx(state, tx, fee, ctx) {
         if (left === 0n) d.delete(from); else d.set(from, left);
         v.delegated -= amount;
       }
-      state.unbonding.push({ address: from, validator: tx.validator, amount, releaseEpoch: state.epoch + UNBONDING_EPOCHS, height: ctx.height });
+      state.unbonding.push({ address: from, validator: tx.validator, amount, releaseEpoch: state.epoch + UNBONDING_EPOCHS, height: ctx.height, epoch: state.epoch });
       return; // still counted in state.staked until released
     }
 
@@ -161,8 +161,10 @@ export function applyStakingTx(state, tx, fee, ctx) {
       v.selfStake -= slashed;
       const dels = state.delegations.get(v.pub);
       if (dels) for (const [addr, d] of dels) { const c = cut(d); dels.set(addr, d - c); slashed += c; v.delegated -= c; }
-      // Stake that started unbonding at or after the offence is still on the hook (no slashing escape).
-      for (const u of state.unbonding) if (u.validator === v.pub && u.height >= a.height) { const c = cut(u.amount); u.amount -= c; slashed += c; }
+      // Stake counted in the offence's voting-weight epoch is still on the hook, including stake that began unbonding
+      // during that epoch (weights only drop at the next boundary, so unstaking early must not escape the slash).
+      const offenceEpoch = ctx.epochAt?.(a.height) ?? state.epoch;
+      for (const u of state.unbonding) if (u.validator === v.pub && u.epoch >= offenceEpoch) { const c = cut(u.amount); u.amount -= c; slashed += c; }
       state.unbonding = state.unbonding.filter((u) => u.amount > 0n);
       state.staked -= slashed;
       // The reporter earns a share, unless the offender reports itself (that share is burned too).

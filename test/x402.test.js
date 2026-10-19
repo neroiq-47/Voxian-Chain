@@ -12,7 +12,7 @@ import { UNIT } from '../src/chain/params.js';
 const until = async (cond) => { for (let i = 0; i < 80; i++) { if (await cond()) return; await new Promise((r) => setTimeout(r, 100)); } throw new Error('timeout'); };
 
 test('x402 end to end over HTTP: 402 challenge, exact + zk-shielded payments, agent', async (t) => {
-  const s = await startServer({ port: 0, host: '127.0.0.1', storage: new MemoryStorage(), secret: 'x402-test', quiet: true });
+  const s = await startServer({ port: 0, host: '127.0.0.1', storage: new MemoryStorage(), secret: 'x402-test', operatorToken: 'op-test-token', quiet: true });
   t.after(() => s.close());
   const base = `http://127.0.0.1:${s.server.address().port}/`;
   const f = (u, i) => fetch(new URL(u, base), i);
@@ -73,7 +73,9 @@ test('x402 end to end over HTTP: 402 challenge, exact + zk-shielded payments, ag
   const stats = await api.stats();
   assert.ok(stats.supply.conserved);
   assert.ok(stats.x402PrivatePayments >= 1);
-  const rev = await api.revenue();
-  assert.ok(BigInt(rev.shieldedRevenue) > 0n, 'operator sees private revenue with its view key');
+  const hidden = await api.revenue();
+  assert.equal(hidden.shieldedRevenue, null, 'shielded revenue is hidden without the operator token');
+  const rev = await api.revenue('op-test-token');
+  assert.ok(BigInt(rev.shieldedRevenue) > 0n, 'operator sees private revenue with its operator token');
   assert.ok(decodeHeader(encodeHeader({ a: 1 })).a === 1);
 });

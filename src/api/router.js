@@ -23,6 +23,15 @@ const FAUCET_GLOBAL_PER_MIN = 20; // new addresses are free, so also cap total f
 const ok = (body, headers = {}) => ({ status: 200, headers, body });
 const err = (status, message, extra = {}) => ({ status, headers: {}, body: { error: message, ...extra } });
 
+// Operator access to shielded totals: a bearer token (the node's VOXIAN_OPERATOR_TOKEN). Unset means no shielded view at all.
+function operatorAuthorized(req, want) {
+  const got = String(req.headers?.authorization ?? '').replace(/^Bearer /, '');
+  if (!want || got.length !== want.length) return false;
+  let diff = 0; // constant-time comparison; the router also runs in the browser, so no node:crypto here
+  for (let i = 0; i < want.length; i++) diff |= got.charCodeAt(i) ^ want.charCodeAt(i);
+  return diff === 0;
+}
+
 // Hide bulky range proofs in explorer views.
 function displayTx(tx) {
   if (tx.type !== 'shielded') return tx;
@@ -46,7 +55,7 @@ function summarizeTx(tx, hash, extra = {}) {
 const blockSummary = (b) => ({ height: b.height, slot: b.slot, hash: b.hash, timestamp: b.timestamp, proposer: b.proposer, txCount: b.txs.length, reward: b.reward, fees: b.fees, pohTicks: b.pohTicks, round: b.commit?.round ?? 0, signers: b.commit?.votes.length ?? 0 });
 const bpsPct = (x, total) => (total > 0n ? Number((x * 10000n) / total) / 100 : 0);
 
-export function createRouter({ chain, consensus, facilitator, services, payee, keys }) {
+export function createRouter({ chain, consensus, facilitator, services, payee, keys, operatorToken }) {
   const faucetLast = new Map();
   let faucetWindow = [];
   // The public facilitator endpoints only settle payments for this node's own services (otherwise anyone
@@ -160,14 +169,16 @@ export function createRouter({ chain, consensus, facilitator, services, payee, k
       services: services.map(({ handler, ...s }) => ({ ...s, priceFormatted: formatVox(BigInt(s.price)), accepts: paymentRequirements(s, payee) })),
     })],
 
-    // The service operator's view: public revenue is visible to all; shielded revenue only via its view key.
-    ['GET', /^\/api\/services\/revenue$/, () => {
+    // The service operator's view: public revenue is visible to all; shielded revenue only with the operator token.
+    ['GET', /^\/api\/services\/revenue$/, (req) => {
+      const publicRevenue = chain.state.account(payee.address).balance.toString();
+      if (!operatorAuthorized(req, operatorToken)) return ok({ publicRevenue, shieldedRevenue: null, shieldedPayments: null });
       let priv = 0n, count = 0;
       for (const n of chain.state.notes.values()) {
         const r = scanOutput(payee.shielded, n);
         if (r) { priv += r.value; count++; }
       }
-      return ok({ publicRevenue: chain.state.account(payee.address).balance.toString(), shieldedRevenue: priv.toString(), shieldedPayments: count });
+      return ok({ publicRevenue, shieldedRevenue: priv.toString(), shieldedPayments: count });
     }],
 
     ['GET', /^\/x402\/supported$/, () => ok(facilitator.supported())],

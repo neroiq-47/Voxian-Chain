@@ -29,12 +29,15 @@ npm run build:pages  # static build in dist/ (the app boots an in-browser node w
 ```
 
 Environment variables:
-- `PORT` (default 8402), `HOST`, `VOXIAN_DATA_DIR` (default `./data`), `VOXIAN_RESET=1` to wipe the chain.
+- `PORT` (default 8402), `HOST` (default `127.0.0.1`; `0.0.0.0` exposes the node and requires `VOXIAN_DEVNET_SECRET`), `VOXIAN_DATA_DIR` (default `./data`), `VOXIAN_RESET=1` to wipe the chain.
+- `VOXIAN_OPERATOR_TOKEN`: bearer token for `GET /api/services/revenue` shielded totals. Unset means shielded revenue is never shown.
 - `VOXIAN_DEVNET_SECRET` derives the validator, faucet and facilitator keys.
 - `VOXIAN_VALIDATORS`: `all` (standalone, the default), `none` (observer/RPC node), or names such as `aurora,borealis`.
 - `VOXIAN_VALIDATOR_SEED`: a 64-hex wallet seed. The node also runs that key as a validator, so a validator registered on-chain with `validator_register` (for example from the web wallet) can propose and vote. Use *Wallet → Show seed* to get it.
 - `VOXIAN_PEERS`: comma-separated peer node URLs.
 - `VOXIAN_NODE_NAME`: a log label.
+- `VOXIAN_PUBLIC_URL`: the URL other peers use to reach this node (defaults to `http://127.0.0.1:<PORT>` when peers are set).
+- `VOXIAN_NODE`: the node URL `npm run agent` talks to (default `http://localhost:8402`).
 
 ## What's inside
 
@@ -139,7 +142,7 @@ Consensus: `GET /api/consensus` (round, slot, epoch, lock, last commit, peers) �
 Paid routes: `/paid/oracle/price`, `/paid/ai/sentiment`, `/paid/ai/summarize`, `/paid/data/chain-insights`, `/paid/random`
 
 ## Deploying the demo
-- **GitHub Pages (no server):** enable *Settings → Pages → Source: GitHub Actions*. Pushing to `main` then runs `.github/workflows/pages.yml`. Every visitor gets their own in-browser devnet, saved in localStorage.
+- **GitHub Pages (no server):** enable *Settings → Pages → Source: GitHub Actions*. Pushing to `main` then runs `.github/workflows/pages.yml`. The site serves the landing page (`site/`) at `/` and the demo app at `/app/`, where every visitor gets their own in-browser devnet, saved in localStorage.
 - **Full node:** any Node 20+ host. Run `npm start` and expose the port. The web app detects the backend automatically.
 
 ## Roadmap (from the white paper)
@@ -157,11 +160,13 @@ Voxian is built in the open and funded through **[GitHub Sponsors](https://githu
 | ☕ Supporter | $5 | Sponsor badge, thanks in the monthly update |
 | 🛠 Builder | $25 | Name in the README, monthly progress update |
 | 🤖 Agent Pioneer | $100 | Priority issue triage, early testnet news |
-| ⛓️ Validator Partner | $500 | Logo in the README and web app, quarterly roadmap call |
+| ⛓️ Validator Partner | $500 | Logo in the README and web app (planned), quarterly roadmap call |
 | 🏢 Enterprise | $2,500 | 2 h a month of x402 / shielded-payment integration support |
-| 🏛 Enterprise Partner | $10,000 | Top logo placement, 8 h a month of support, named funder of the security review |
+| 🏛 Enterprise Partner | $10,000 | Top logo placement (planned), 8 h a month of support, named funder of the security review |
 
 One-time gifts of any amount are welcome too. See [docs/SPONSORS.md](docs/SPONSORS.md) for the full tier details.
+
+**Donate with crypto (Solana mainnet only):** `5g4xQALSN81J1EseRkkb4GGWJiLAJCPRnoqUeB5jYWkk`
 
 Funding pays for:
 1. Independent security reviews (the white paper's step before any mainnet decision).

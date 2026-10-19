@@ -35,7 +35,8 @@ function summarize(text, n = 2) {
 
 // Simulated price: smooth random walk derived from the chain tip, so every node agrees.
 function price(pair, chain) {
-  const base = { 'VOX-USD': 0.42, 'BTC-USD': 112_000, 'ETH-USD': 4_200, 'SOL-USD': 210 }[pair];
+  const table = { 'VOX-USD': 0.42, 'BTC-USD': 112_000, 'ETH-USD': 4_200, 'SOL-USD': 210 };
+  const base = Object.hasOwn(table, pair) ? table[pair] : undefined;
   if (base === undefined) throw Object.assign(new Error('unknown pair (try VOX-USD, BTC-USD, ETH-USD, SOL-USD)'), { status: 400 });
   const h = parseInt(sha256Hex(`${pair}:${Math.floor(chain.height / 5)}`).slice(0, 8), 16) / 0xffffffff;
   const drift = Math.sin(chain.height / 40) * 0.03 + (h - 0.5) * 0.02;
