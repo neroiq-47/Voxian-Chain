@@ -43,6 +43,9 @@ footer{border-top:1px solid #ffffff12;padding:25px 0;color:#817886;font-size:11p
 @media(max-width:900px){.stats{grid-template-columns:repeat(3,1fr)}.stat:nth-child(3){border-right:0}.stat:nth-child(-n+3){border-bottom:1px solid var(--line)}}
 @media(max-width:800px){.hero{grid-template-columns:1fr;gap:40px;padding-top:52px}.mascot-frame{max-width:340px}.cards,.tiers{grid-template-columns:1fr}.card{min-height:auto}.split{grid-template-columns:1fr;gap:20px}.navlinks{gap:14px}.navlinks a:not(.button):not(.bull-btn){display:none}.banner img{min-height:180px;object-fit:cover}.cta{align-items:flex-start;flex-direction:column}}
 @media(max-width:480px){.wrap{width:calc(100% - 28px)}nav{height:72px}.brand{font-size:12px;letter-spacing:.12em}.hero{padding:45px 0 55px}h1{font-size:54px}.lead{font-size:15px}section{padding:52px 0}.banner-label{font-size:24px}.foot{align-items:flex-start;flex-direction:column}.stats{grid-template-columns:repeat(2,1fr)}.stat{border-right:0!important;border-bottom:1px solid var(--line)}.navlinks .button:not(.primary){display:none}.bull-btn span{display:none}.bull-btn{padding:3px}}
+.demo-frame { display: block; width: 100%; height: min(820px, 88vh); min-height: 560px; border: 1px solid var(--line); background: #080708; }
+.demo-embed .fine { margin-top: 14px; }
+@media (max-width: 480px) { .demo-frame { min-height: 620px; } }
 </style>
 </head>
 <body>
@@ -103,6 +106,18 @@ footer{border-top:1px solid #ffffff12;padding:25px 0;color:#817886;font-size:11p
         </div>
         <a class="button primary" href="app/">Open the live demo →</a>
       </div>
+    </div>
+  </section>
+
+  <section class="demo-embed" id="demo" aria-labelledby="demo-embed-title">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="kicker">Live devnet</div>
+        <h2 id="demo-embed-title">The demo, on this page</h2>
+        <p>The whole chain runs in this tab: wallet, faucet, x402 market, AI agent, staking and explorer.</p>
+      </div>
+      <iframe class="demo-frame" src="app/" title="Voxian live devnet demo" loading="lazy" allow="clipboard-write"></iframe>
+      <p class="fine"><a href="app/">Open the demo full screen →</a></p>
     </div>
   </section>
 

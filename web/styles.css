@@ -190,3 +190,5 @@ pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-family: var
 @media (max-width: 960px) { .stats-strip > .card:nth-child(2n) { border-right: 0; } .stats-strip > .card { border-bottom: 1px solid var(--line); } }
 @media (max-width: 800px) { .hero-split { grid-template-columns: 1fr; gap: 36px; padding: 36px 0 28px; } .mascot-frame { max-width: 300px; } }
 @media (max-width: 680px) { .stats-strip > .card { border-right: 0; } a.btn.landing-link { display: none; } .hero h1 { font-size: 2.6rem; } }
+
+.embedded a.btn.landing-link { display: none; }
